@@ -85,7 +85,7 @@ def main():
 
     # calc jaccard with multiprocessing
     with Pool(processes=cmd.cores) as pool:
-        jaccard_sims = pool.map(partial(calculate_row_jaccard,
+        jaccard_sims = pool.imap(partial(calculate_row_jaccard,
             all_fragment_occ_list=just_fragment_occ), just_md_occ)
 
     # write to output file
