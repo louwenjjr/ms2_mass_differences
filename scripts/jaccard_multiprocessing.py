@@ -87,6 +87,8 @@ def main():
     with Pool(processes=cmd.cores) as pool:
         jaccard_sims = pool.imap(partial(calculate_row_jaccard,
             all_fragment_occ_list=just_fragment_occ), just_md_occ)
+    pool.close()
+    pool.join()
 
     # write to output file
     with open(cmd.output_file, 'w') as outf:
