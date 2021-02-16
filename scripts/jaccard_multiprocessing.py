@@ -19,12 +19,12 @@ def get_commands():
     parser = argparse.ArgumentParser(description="Loads data from notebook 2 in this repo\
         and calculates jaccard similarity between mass differences and fragments/neutral\
         losses in a multithreading way. Resulting matrix will be written to output_file.")
-    parser.add_argument("-m", "--mds", metavar=".pickle", help="pickle file containing\
-        list of list of mass difference occurrences (str)")
-    parser.add_argument("-f", "--fragments", metavar=".pickle", help="pickle file containing\
-        list of list of fragment/neutral loss occurrences (str)")
+    parser.add_argument("-m", "--mds", metavar="<.pickle>", help="pickle file containing\
+        list of list of mass difference occurrences (str)", required=True)
+    parser.add_argument("-f", "--fragments", metavar="<.pickle>", help="pickle file containing\
+        list of list of fragment/neutral loss occurrences (str)", required=True)
     parser.add_argument("-o", "--output_file", metavar="<file>", help="location of output\
-        file")
+        file (default: jaccard_matrix.csv", default="jaccard_matrix.csv")
     return parser.parse_args()
 
 
