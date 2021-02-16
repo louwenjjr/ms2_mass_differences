@@ -6,5 +6,6 @@ To recreate this analysis it is best to create a conda environment like such:
 conda create --name spec_analysis python=3.7
 conda activate spec_analysis
 conda install --channel nlesc --channel bioconda --channel conda-forge spec2vec
+conda install -c conda-forge scikit-learn
 pip install jupyter
 ```
