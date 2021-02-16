@@ -4,13 +4,19 @@ Author: Joris Louwen
 
 Loads data from notebook 2 and calculates jaccard similarity between mass differences and fragments/neutral losses.
 The resulting matrix will be written to a file in output folder.
+
+The files from notebook 2 are called:
+gnps_positive_ionmode_cleaned_by_matchms_and_lookups_mass_difference_occurrence.pickle
+gnps_positive_ionmode_cleaned_by_matchms_and_lookups_fragments_occurrences.pickle
 """
 
 import pickle
 import os
 import argparse
+import time
 from multiprocessing import Pool
 from typing import List
+from functools import partial
 
 
 def get_commands():
@@ -20,11 +26,13 @@ def get_commands():
         and calculates jaccard similarity between mass differences and fragments/neutral\
         losses in a multithreading way. Resulting matrix will be written to output_file.")
     parser.add_argument("-m", "--mds", metavar="<.pickle>", help="pickle file containing\
-        list of list of mass difference occurrences (str)", required=True)
+        list of list of mass difference occurrences (tuple)", required=True)
     parser.add_argument("-f", "--fragments", metavar="<.pickle>", help="pickle file containing\
-        list of list of fragment/neutral loss occurrences (str)", required=True)
+        list of list of fragment/neutral loss occurrences (tuple)", required=True)
     parser.add_argument("-o", "--output_file", metavar="<file>", help="location of output\
-        file (default: jaccard_matrix.csv", default="jaccard_matrix.csv")
+        file (default: jaccard_matrix.csv)", default="jaccard_matrix.csv")
+    parser.add_argument("-c", "--cores", help="Cores to use (default: 20)", default=20,
+        type=int)
     return parser.parse_args()
 
 
@@ -60,5 +68,35 @@ def calculate_row_jaccard(md_occ_list: List[str], all_fragment_occ_list: List[Li
     return jaccard_sims
 
 
-if __name__ == "__main__":
+def main():
+    """Main functionality of this script"""
+    start = time.time()
     cmd = get_commands()
+
+    # read pickled input files
+    with open(cmd.mds, 'rb') as inf:
+        md_occ = pickle.load(inf)
+    with open(cmd.fragments, 'rb') as inf:
+        fragment_occ = pickle.load(inf)
+
+    # get only the occurrences
+    just_md_occ = [tup[1] for tup in md_occ]
+    just_fragment_occ = [tup[1] for tup in fragment_occ]
+
+    # calc jaccard with multiprocessing
+    with Pool(processes=cmd.cores) as pool:
+        jaccard_sims = pool.imap(partial(calculate_row_jaccard,
+            all_fragment_occ_list=just_fragment_occ), just_md_occ)
+
+    # write to output file
+    with open(cmd.output_file, 'w') as outf:
+        # header
+        outf.write(",{}\n".format(",".join([tup[0] for tup in fragment_occ])))
+        for i, j_sims in enumerate(jaccard_sims):
+            md_name = md_occ[i][0]
+            outf.write("{},{}\n".format(md_name, ",".join(map(str, j_sims))))
+    end = time.time()
+    print("Time elapsed (hours): ", (end-start)/3600)
+
+if __name__ == "__main__":
+    main()
