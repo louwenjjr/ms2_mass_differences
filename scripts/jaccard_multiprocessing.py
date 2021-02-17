@@ -71,6 +71,7 @@ def calculate_row_jaccard(md_occ_list: List[str], all_fragment_occ_list: List[Li
 def main():
     """Main functionality of this script"""
     start = time.time()
+    print("\nStart")
     cmd = get_commands()
 
     # read pickled input files
@@ -84,13 +85,15 @@ def main():
     just_fragment_occ = [tup[1] for tup in fragment_occ]
 
     # calc jaccard with multiprocessing
-    with Pool(processes=cmd.cores) as pool:
-        jaccard_sims = pool.imap(partial(calculate_row_jaccard,
-            all_fragment_occ_list=just_fragment_occ), just_md_occ)
+    print("\nStart with calculations")
+    pool = Pool(processes=cmd.cores)
+    jaccard_sims = pool.imap(partial(calculate_row_jaccard,
+        all_fragment_occ_list=just_fragment_occ), just_md_occ, chunksize=250)
     pool.close()
     pool.join()
 
     # write to output file
+    print("\nWriting to file")
     with open(cmd.output_file, 'w') as outf:
         # header
         outf.write(",{}\n".format(",".join([tup[0] for tup in fragment_occ])))
