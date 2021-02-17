@@ -77,7 +77,8 @@ def calculate_row_jaccard(md_occ_list: List[str],
 
 
 def main():
-    """Main functionality of this script"""
+    """Main functionality of this script
+    """
     start = time.time()
     print("\nStart")
     cmd = get_commands()
@@ -102,7 +103,7 @@ def main():
     chunk_len = 7500
     num_chunks = ceil(len(just_md_occ)/chunk_len)
     for chunk_num in range(num_chunks):
-        print(f"\nData chunk number {chunk_num}")
+        print(f"\nData chunk number {chunk_num}/{num_chunks-1}")
         current_chunk = just_md_occ[chunk_len*chunk_num: chunk_len*(chunk_num+1)]
         pool = Pool(processes=cmd.cores)
         jaccard_sims = pool.imap_unordered(partial(calculate_row_jaccard,
