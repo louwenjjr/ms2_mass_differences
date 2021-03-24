@@ -14,11 +14,12 @@ occurrences.pickle"
 """
 
 import pickle
-import os
 import argparse
 import time
+import numpy as np
+import scipy.sparse as sp
 from multiprocessing import Pool
-from typing import List, Union
+from typing import List, Tuple
 from functools import partial
 from math import ceil
 
@@ -39,7 +40,7 @@ def get_commands() -> argparse.Namespace:
         (tuple)", required=True)
     parser.add_argument("-o", "--output_file", metavar="<file>",
                         help="location of output file (default:\
-                        jaccard_matrix.csv)", default="jaccard_matrix.csv")
+                        jaccard_matrix.npz)", default="jaccard_matrix.npz")
     parser.add_argument("-c", "--cores", help="Cores to use (default: 20)",
                         default=20, type=int)
     return parser.parse_args()
@@ -63,7 +64,7 @@ def jaccard_list_occurrences(list_1: List[str], list_2: List[str]) -> float:
 
 def calculate_row_jaccard(md_occ_list: List[str],
                           all_fragment_occ_list: List[List[str]]) \
-        -> List[Union[str, float]]:
+        -> Tuple[str, List[float]]:
     """
     For one mass difference, calc Jaccard similarity to all fragments/n_losses
     
@@ -83,11 +84,11 @@ def calculate_row_jaccard(md_occ_list: List[str],
         floats
     """
     md_name = md_occ_list.pop(0)
-    jaccard_sims = [md_name]
+    jaccard_sims = []
     for frag_occ_list in all_fragment_occ_list:
         jaccard_sims.append(
             jaccard_list_occurrences(md_occ_list, frag_occ_list))
-    return jaccard_sims
+    return md_name, jaccard_sims
 
 
 def main():
@@ -98,7 +99,7 @@ def main():
     cmd = get_commands()
 
     # read pickled input files
-    print("Reading input files, creating output file: ", cmd.output_file)
+    print("Reading input files")
     with open(cmd.mds, 'rb') as inf:
         md_occ = pickle.load(inf)
     with open(cmd.fragments, 'rb') as inf:
@@ -106,16 +107,18 @@ def main():
 
     # get only the occurrences
     just_md_occ = [[tup[0]] + tup[1] for tup in md_occ]
-    just_fragment_occ = [tup[1] for tup in fragment_occ]
+    column_names = []  # collect column names (fragments + neutral losses)
+    just_fragment_occ = []
+    for tup in fragment_occ:
+        column_names.append(tup[0])
+        just_fragment_occ.append(tup[1])
 
-    # create/overwrite output file with header
-    with open(cmd.output_file, 'w') as outf:
-        outf.write(",{}\n".format(",".join([tup[0] for tup in fragment_occ])))
-
-    # calc jaccard with multiprocessing, in chuncks of 10,000 rows
+    # calc jaccard with multiprocessing, in chunks of 10,000 rows
     print("\nStart with calculations")
     chunk_len = 7500
     num_chunks = ceil(len(just_md_occ) / chunk_len)
+    row_names = []
+    all_sparse_jacc_chunks = []
     for chunk_num in range(num_chunks):
         print(f"\nData chunk number {chunk_num}/{num_chunks - 1}")
         current_chunk = just_md_occ[
@@ -129,13 +132,29 @@ def main():
         pool.close()
         pool.join()
 
-        # write to output file
-        print("Writing current chunck to file")
-        with open(cmd.output_file, 'a') as outf:
-            for j_sims in jaccard_sims:
-                outf.write("{}\n".format(",".join(map(str, j_sims))))
-        del (pool, jaccard_sims)
+        # append all rows in a sparse csr matrix and save rownames
+        print("  constructing sparse matrix")
+        sparse_jacc_chunk = None
+        for i, row in enumerate(jaccard_sims):
+            row_name, row_vals = row
+            row_names.append(row_name)
+            curr = sp.csr_matrix(row_vals, dtype=np.float64)
+            if i == 0:
+                sparse_jacc_chunk = curr
+            else:
+                sparse_jacc_chunk = sp.vstack([sparse_jacc_chunk, curr])
+        del (pool, jaccard_sims)  # clear memory
+        all_sparse_jacc_chunks.append(sparse_jacc_chunk)
 
+    # add all sparse chunks together in one sparse matrix and save
+    output_file = cmd.output_file
+    if not output_file.endswith(".npz"):
+        output_file += ".npz"
+    print("\nAdding all chunks together and saving to output:", output_file)
+
+    sparse_jacc_matrix = sp.vstack(all_sparse_jacc_chunks)
+    np.savez(output_file, rows=row_names, columns=column_names,
+             sparse_jaccard=sparse_jacc_matrix)
     end = time.time()
     print("Time elapsed (hours): ", (end - start) / 3600)
 
