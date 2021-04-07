@@ -29,16 +29,20 @@ def get_commands() -> argparse.Namespace:
     parser.add_argument("-m", "--mds", metavar="<.txt>", help="Text file\
         containing list of mass differences to use, default: use all mass\
         differences found with other parameters", default=False)
-    parser.add_argument("-e", "--existing_s2v", metavar="<.model>", help="Use\
+    parser.add_argument("-s", "--s2v_embedding", metavar="<.model>", help="Use\
         an existing Spec2Vec embedding instead of training a new one, default:\
         False", default=False)
+    parser.add_argument("-e", "--existing_md_embedding", metavar="<.model>",
+                        help="Use an existing Spec2Vec embedding that includes\
+        mass differences as features instead of training a new\
+        one, default: False", default=False)
     parser.add_argument("-l", "--lower_intensity_cutoff", metavar=None,
                         help="Minimum intensity for peaks to be included in\
                         mass difference selection, default: 0.05", type=float,
                         default=0.05)
     parser.add_argument("-b", "--binning_precision", metavar=None,
                         help="Number of decimals to bin on, default: 2",
-                        type=int, default=2
+                        type=int, default=2)
     parser.add_argument("-p", "--punish_intensities", metavar=None,
                         help="Toggle to punish intensities of mass differences",
                         action="store_true", default=False, type=bool)
