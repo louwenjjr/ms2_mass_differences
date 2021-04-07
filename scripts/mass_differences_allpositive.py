@@ -61,7 +61,8 @@ if __name__ == "__main__":
     print("Start")
 
     input_spectrums = pickle.load(open(cmd.input_file, 'rb'))
-    processing_res = processing_master(input_spectrums)
+    processing_res = processing_master(
+        input_spectrums, low_int_cutoff=cmd.lower_intensity_cutoff)
     print(f"\n{len(processing_res[0])} remaining top30 spectra.")
     print(f"as a check: {len(processing_res[1])} remaining spectra in "
           f"normally processed data for s2v.")

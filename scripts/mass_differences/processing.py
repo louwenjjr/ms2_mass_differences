@@ -71,7 +71,8 @@ def post_process_normal(spectrum_in: SpectrumType, min_peaks: int = 10) \
     return s
 
 
-def post_process_md(spectrum_in: SpectrumType, min_peaks: int = 10,
+def post_process_md(spectrum_in: SpectrumType, low_int_cutoff: float = 0.05,
+                    min_peaks: int = 10,
                     max_peaks: int = 30) -> Union[SpectrumType, None]:
     """Processing of spectra that are used for mass difference extraction
 
@@ -79,6 +80,8 @@ def post_process_md(spectrum_in: SpectrumType, min_peaks: int = 10,
     ----------
     spectrum_in:
         Input spectrum.
+    low_int_cutoff:
+        Lower intensity cutoff for the peaks selected for MD
     min_peaks:
         Minimum number of peaks to pass the spectrum (otherwise -> None)
     max_peaks:
@@ -100,6 +103,11 @@ def post_process_md(spectrum_in: SpectrumType, min_peaks: int = 10,
     s_remove_low_peaks = select_by_relative_intensity(s, intensity_from=0.001)
     if len(s_remove_low_peaks.peaks) >= 10:
         s = s_remove_low_peaks
+    # do an additional removal step with a different intensity cutoff
+    s_second_peak_removal = select_by_relative_intensity(
+        s, intensity_from=low_int_cutoff)
+    if len(s_second_peak_removal.peaks) >= 10:
+        s = s_second_peak_removal
 
     # reduce to top30 peaks
     s = reduce_to_number_of_peaks(s, n_required=min_peaks, n_max=max_peaks)
@@ -128,7 +136,8 @@ def post_process_classical(spectrum_in: SpectrumType, min_peaks: int = 10) \
     return s
 
 
-def processing_master(spectrums: List[SpectrumType]) -> Tuple[
+def processing_master(spectrums: List[SpectrumType],
+                      low_int_cutoff: float = 0.05) -> Tuple[
         List[SpectrumType], List[SpectrumType], List[SpectrumType]]:
     """
     Returns tuple of processed spectra for: MD selection, Spec2Vec, classical
@@ -137,6 +146,8 @@ def processing_master(spectrums: List[SpectrumType]) -> Tuple[
     ----------
     spectrums:
         List of input spectra to be processed.
+    low_int_cutoff:
+        Lower intensity cutoff for the peaks selected for MD
     """
     spectrums_top30 = []
     spectrums_processed = []
@@ -144,7 +155,8 @@ def processing_master(spectrums: List[SpectrumType]) -> Tuple[
     minimum_peaks = 10
     maximum_peaks = 30
     for spec in spectrums:
-        s_top30 = post_process_md(spec, min_peaks=minimum_peaks,
+        s_top30 = post_process_md(spec, low_int_cutoff=low_int_cutoff,
+                                  min_peaks=minimum_peaks,
                                   max_peaks=maximum_peaks)
         s_normal = post_process_normal(spec, min_peaks=minimum_peaks)
         s_classical = post_process_classical(spec, min_peaks=minimum_peaks)
