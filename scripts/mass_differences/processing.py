@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+import numpy as np
 from typing import Union, List, Tuple
 from matchms.filtering import normalize_intensities
 from matchms.filtering import select_by_mz
