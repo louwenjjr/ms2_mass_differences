@@ -9,11 +9,18 @@ embeddings trained with Mass differences added as features.
 import pickle
 import argparse
 import time
-import numpy as np
-from typing import List, Tuple
+import os
+import gensim
 from mass_differences.processing import processing_master
 from mass_differences.create_mass_differences import get_mass_differences
 from mass_differences.create_mass_differences import get_md_documents
+from mass_differences.create_mass_differences import convert_md_tup
+from mass_differences.utils import read_mds
+from mass_differences.validation_pipeline import select_query_spectra
+from spec2vec import Spec2Vec
+from spec2vec import SpectrumDocument
+from spec2vec.model_building import train_new_word2vec_model
+from copy import deepcopy
 
 
 def get_commands() -> argparse.Namespace:
@@ -29,8 +36,9 @@ def get_commands() -> argparse.Namespace:
                         help="location of output folder, default: ./",
                         default="./")
     parser.add_argument("-m", "--mds", metavar="<.txt>", help="Text file\
-        containing list of mass differences to use, default: use all mass\
-        differences found with other parameters", default=False)
+        containing list of mass differences to use. Should be a tab delim file\
+        with mass differences in first column. A header is expected! Default:\
+        use all mass differences found with other parameters", default=False)
     parser.add_argument("-s", "--s2v_embedding", metavar="<.model>", help="Use\
         an existing Spec2Vec embedding instead of training a new one, default:\
         False", default=False)
@@ -62,11 +70,22 @@ if __name__ == "__main__":
     cmd = get_commands()
     start = time.time()
     print("Start")
+    if not os.path.isdir(cmd.output_dir):
+        os.mkdir(cmd.output_dir)
+    print("Writing output to", cmd.output_dir)
+
+    if not cmd.mds:
+        white_listed_mds = False
+        print("\nNo MDs found as input, all UNFILTERED found mass differences\
+            will be used!")
+    else:
+        print("\nRead list of mass difference to use")
+        white_listed_mds = read_mds(cmd.mds, n_decimals=cmd.binning_precision)
 
     input_spectrums = pickle.load(open(cmd.input_file, 'rb'))
     processing_res = processing_master(
         input_spectrums, low_int_cutoff=cmd.lower_intensity_cutoff)
-    print(f"\n{len(processing_res[0])} remaining top30 spectra.")
+    print(f"\n{len(processing_res[0])} remaining MD processed spectra.")
     print(f"as a check: {len(processing_res[1])} remaining spectra in "
           f"normally processed data for s2v.")
     print(f"as a check: {len(processing_res[2])} remaining spectra in "
@@ -76,9 +95,68 @@ if __name__ == "__main__":
     for spec in processing_res[0]:
         mass_differences.append(get_mass_differences(spec))  # list of Spikes
 
-    md_documents = get_md_documents(mass_differences)
-    print(len(md_documents))
-    print(md_documents[0])
+    md_documents = get_md_documents(mass_differences,
+                                    n_decimals=cmd.binning_precision)
+    print(f"\n{len(md_documents)} remaining MD documents (spectra).")
+    print("An example:", md_documents[-1])
+
+    # validation pipeline
+    spectrums_top30, spectrums_processed, spectrums_classical = processing_res
+    # select query spectra
+    print("\nSelecting query spectra")
+    selected_spectra = select_query_spectra(spectrums_top30)
+
+    # train new embedding for 'normal' Spec2Vec
+    documents_library_processed = [SpectrumDocument(s, n_decimals=2) for i, s
+                                   in enumerate(spectrums_processed) if
+                                   i not in selected_spectra]
+    documents_library_classical = [SpectrumDocument(s, n_decimals=2) for i, s
+                                   in enumerate(spectrums_classical) if
+                                   i not in selected_spectra]
+    if not cmd.s2v_embedding:
+        model_file = os.path.join(cmd.output_dir,
+                                  "spec2vec_librarymatching.model")
+        print("\nTraining new 'normal' Spec2Vec model at", model_file)
+        model = train_new_word2vec_model(documents_library_processed,
+                                         [15], model_file)  # 15 iterations
+    else:
+        model_file = cmd.s2v_embedding
+        print("Loading existing 'normal' Spec2Vec model from", model_file)
+        model = gensim.models.Word2Vec.load(model_file)
+
+    # train new embedding for Spec2Vec + MDs
+    documents_library_mds = [md_doc for i, md_doc in enumerate(md_documents) if
+                             i not in selected_spectra]
+    documents_library_processed_with_mds = []
+    set_chosen_mds = set(white_listed_mds)
+    c_multiply = True  # multiply intensities with sqrt of count
+    for doc, md_doc in zip(documents_library_processed, documents_library_mds):
+        new_doc = deepcopy(doc)  # make sure original doc is not affected
+
+        processed_mds = [
+            convert_md_tup(md,
+                           count_multiplier=c_multiply,
+                           punish=cmd.punish_intensities)
+            for md in md_doc if md[0] in set_chosen_mds]
+        if processed_mds:
+            md_words, md_intensities = zip(*processed_mds)
+            new_doc.words.extend(md_words)
+            new_doc.weights.extend(md_intensities)
+        assert len(new_doc.words) == len(new_doc.weights)
+
+        documents_library_processed_with_mds.append(new_doc)
+
+    if not cmd.existing_md_embedding:
+        model_file_mds = os.path.join(
+            cmd.output_dir, "spec2vec_librarymatching_added_MDs.model")
+        print("\nTraining new 'Spec2Vec model with MDs at", model_file_mds)
+        model_mds = train_new_word2vec_model(
+            documents_library_processed_with_mds, [15], model_file_mds)
+    else:
+        model_file_mds = cmd.existing_md_embedding
+        print("\nLoading existing Spec2Vec model with MDs from",
+              model_file_mds)
+        model_mds = gensim.models.Word2Vec.load(model_file_mds)
 
     end = time.time()
-    print(f"\nFinished in {end-start} s")
+    print(f"\nFinished in {end - start:.3f} s")

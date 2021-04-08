@@ -96,3 +96,28 @@ def get_md_documents(mass_differences: List[Spikes],
         info_tup.sort(key=lambda x: x[2], reverse=True)
         md_documents.append(info_tup)
     return md_documents
+
+
+def convert_md_tup(md_tup: Tuple[str, List[float], int],
+                   count_multiplier: bool = True,
+                   punish: bool = False) -> Tuple[str, float]:
+    """Convert md_tup to (word, intensity)
+
+    Parameters
+    ----------
+    md_tup:
+        The tuple containing info for one MD in a MD document
+    count_multiplier:
+        Add bonus if MD occurs multiple times in the spectrum: * sqrt(count)
+    punish:
+        Punish MD intensity by dividing by 2
+    """
+    word = f"md@{md_tup[0]}"
+    intensity = max(md_tup[1])
+    if punish:
+        intensity = intensity / 2
+    if count_multiplier:
+        intensity = intensity * np.sqrt(md_tup[2])
+    if intensity > 1:
+        intensity = 1.0
+    return word, intensity
