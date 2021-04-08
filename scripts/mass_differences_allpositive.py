@@ -12,6 +12,7 @@ import time
 import numpy as np
 from typing import List, Tuple
 from mass_differences.processing import processing_master
+from mass_differences.create_mass_differences import get_mass_differences
 
 
 def get_commands() -> argparse.Namespace:
@@ -58,6 +59,7 @@ def get_commands() -> argparse.Namespace:
 
 if __name__ == "__main__":
     cmd = get_commands()
+    start = time.time()
     print("Start")
 
     input_spectrums = pickle.load(open(cmd.input_file, 'rb'))
@@ -69,4 +71,9 @@ if __name__ == "__main__":
     print(f"as a check: {len(processing_res[2])} remaining spectra in "
           f"classically processed data for cosine.")
 
-    print("\nFinished")
+    mass_differences = []
+    for spec in processing_res[0]:
+        mass_differences.append(get_mass_differences(spec))  # list of Spikes
+
+    end = time.time()
+    print(f"\nFinished in {end-start} s")
