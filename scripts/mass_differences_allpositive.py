@@ -13,6 +13,7 @@ import numpy as np
 from typing import List, Tuple
 from mass_differences.processing import processing_master
 from mass_differences.create_mass_differences import get_mass_differences
+from mass_differences.create_mass_differences import get_md_documents
 
 
 def get_commands() -> argparse.Namespace:
@@ -74,6 +75,10 @@ if __name__ == "__main__":
     mass_differences = []
     for spec in processing_res[0]:
         mass_differences.append(get_mass_differences(spec))  # list of Spikes
+
+    md_documents = get_md_documents(mass_differences)
+    print(len(md_documents))
+    print(md_documents[0])
 
     end = time.time()
     print(f"\nFinished in {end-start} s")
