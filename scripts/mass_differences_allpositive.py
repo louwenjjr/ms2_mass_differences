@@ -11,13 +11,16 @@ import argparse
 import time
 import os
 import gensim
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
 from mass_differences.processing import processing_master
 from mass_differences.create_mass_differences import get_mass_differences
 from mass_differences.create_mass_differences import get_md_documents
 from mass_differences.create_mass_differences import convert_md_tup
 from mass_differences.utils import read_mds
 from mass_differences.validation_pipeline import select_query_spectra
-from spec2vec import Spec2Vec
+from mass_differences.library_search import library_matching
 from spec2vec import SpectrumDocument
 from spec2vec.model_building import train_new_word2vec_model
 from copy import deepcopy
@@ -123,6 +126,7 @@ if __name__ == "__main__":
         model_file = cmd.s2v_embedding
         print("Loading existing 'normal' Spec2Vec model from", model_file)
         model = gensim.models.Word2Vec.load(model_file)
+    print("Normal Spec2Vecmodel:", model)
 
     # train new embedding for Spec2Vec + MDs
     documents_library_mds = [md_doc for i, md_doc in enumerate(md_documents) if
@@ -157,6 +161,325 @@ if __name__ == "__main__":
         print("\nLoading existing Spec2Vec model with MDs from",
               model_file_mds)
         model_mds = gensim.models.Word2Vec.load(model_file_mds)
+    print("MDs Spec2Vec model:", model_mds)
+
+    # library matching
+    documents_query_processed = [
+        SpectrumDocument(spectrums_processed[i], n_decimals=2) for i in
+        selected_spectra]
+    documents_query_classical = [
+        SpectrumDocument(spectrums_classical[i], n_decimals=2) for i in
+        selected_spectra]
+
+    found_matches_processed = library_matching(
+        documents_query_processed,
+        documents_library_processed,
+        model,
+        presearch_based_on=[
+           "precursor_mz",
+           "spec2vec-top20"],
+        include_scores=["cosine",
+                       "modcosine"],
+        ignore_non_annotated=True,
+        intensity_weighting_power=0.5,
+        allowed_missing_percentage=50.0,
+        cosine_tol=0.005,
+        mass_tolerance=1.0,
+        mass_tolerance_type="ppm")
+    found_matches_classical = library_matching(
+        documents_query_classical,
+        documents_library_classical,
+        model,
+        presearch_based_on=[
+           "precursor_mz"],
+        include_scores=["cosine",
+                       "modcosine"],
+        ignore_non_annotated=True,
+        intensity_weighting_power=0.5,
+        allowed_missing_percentage=50.0,
+        cosine_tol=0.005,
+        mass_tolerance=1.0,
+        mass_tolerance_type="ppm")
+    # library matching for MDs
+    documents_query_mds = [md_doc for i, md_doc in enumerate(md_documents) if
+                           i in selected_spectra]
+    documents_query_processed_with_mds = []
+    set_chosen_mds = set(white_listed_mds)
+    for doc, md_doc in zip(documents_query_processed, documents_query_mds):
+        new_doc = deepcopy(doc)  # make sure original doc is not affected
+
+        processed_mds = [convert_md_tup(md) for md in md_doc if
+                         md[0] in set_chosen_mds]
+        if processed_mds:
+            md_words, md_intensities = zip(*processed_mds)
+            new_doc.words.extend(md_words)
+            new_doc.weights.extend(md_intensities)
+        assert len(new_doc.words) == len(new_doc.weights)
+
+        documents_query_processed_with_mds.append(new_doc)
+
+    found_matches_processed_with_mds = library_matching(
+        documents_query_processed_with_mds,
+        documents_library_processed_with_mds,
+        model_mds,
+        presearch_based_on=["precursor_mz", "spec2vec-top20"],
+        include_scores=["cosine", "modcosine"],
+        ignore_non_annotated=True,
+        intensity_weighting_power=0.5,
+        allowed_missing_percentage=50.0,
+        cosine_tol=0.005,
+        mass_tolerance=1.0,
+        mass_tolerance_type="ppm")
+
+    min_match = 2
+    cosine_thresholds = np.arange(0, 1, 0.05)
+
+    test_matches_min2 = []
+    for threshold in cosine_thresholds:
+        print(f"Checking matches for cosine score > {threshold:.2f}")
+        test_matches = []
+
+        for ID in range(len(documents_query_classical)):
+            if len(found_matches_classical[ID]) > 0:
+                # Scenario 1: mass + sort by cosine
+                df_select = found_matches_classical[ID][
+                    (found_matches_classical[ID]['mass_match'] == 1)
+                    & (found_matches_classical[ID]['cosine_score'] > threshold)
+                    & (found_matches_classical[ID][
+                           'cosine_matches'] >= min_match)]
+
+                if df_select.shape[0] > 0:
+                    best_match_ID = df_select.sort_values(
+                        by=['cosine_score'], ascending=False).index[0]
+                    inchikey_selected = documents_library_classical[
+                                            best_match_ID]._obj.get(
+                        "inchikey")[:14]
+                    inchikey_query = documents_query_classical[ID]._obj.get(
+                        "inchikey")[:14]
+
+                    best_bet = 1 * (inchikey_selected == inchikey_query)
+                else:
+                    best_bet = -1  # meaning: not found
+                test_matches.append(best_bet)
+
+        # Make arrays from lists:
+        test_arr = np.array(test_matches)
+
+        test_matches_min2.append([np.sum(test_arr == 1), np.sum(test_arr == 0),
+                                  np.sum(test_arr == -1)])
+
+    min_match = 6
+    test_matches_min6 = []
+    for threshold in cosine_thresholds:
+        print(f"Checking matches for cosine score > {threshold:.2f}")
+        test_matches = []
+
+        for ID in range(len(documents_query_classical)):
+            if len(found_matches_classical[ID]) > 0:
+                # Scenario 1: mass + sort by cosine
+                df_select = found_matches_classical[ID][
+                    (found_matches_classical[ID]['mass_match'] == 1)
+                    & (found_matches_classical[ID]['cosine_score'] > threshold)
+                    & (found_matches_classical[ID][
+                           'cosine_matches'] >= min_match)]
+
+                if df_select.shape[0] > 0:
+                    best_match_ID = df_select.sort_values(
+                        by=['cosine_score'], ascending=False).index[0]
+                    inchikey_selected = documents_library_classical[
+                                            best_match_ID]._obj.get(
+                        "inchikey")[:14]
+                    inchikey_query = documents_query_classical[ID]._obj.get(
+                        "inchikey")[:14]
+
+                    best_bet = 1 * (inchikey_selected == inchikey_query)
+                else:
+                    best_bet = -1  # meaning: not found
+                test_matches.append(best_bet)
+
+        # Make arrays from lists:
+        test_arr = np.array(test_matches)
+
+        test_matches_min6.append([np.sum(test_arr == 1), np.sum(test_arr == 0),
+                                  np.sum(test_arr == -1)])
+
+    test_matches_s2v = []
+    for threshold in cosine_thresholds:
+        print(f"Checking matches for spec2vec score > {threshold:.2f}")
+        test_matches = []
+
+        for ID in range(len(documents_query_processed)):
+
+            # Scenario 2: mass + sort by Spec2Vec
+            df_select = found_matches_processed[ID][
+                (found_matches_processed[ID]['mass_match'] == 1)
+                & (found_matches_processed[ID]['s2v_score'] > threshold)]
+            if df_select.shape[0] > 0:
+                best_match_ID = df_select.sort_values(
+                    by=['s2v_score'], ascending=False).index[0]
+                inchikey_selected = documents_library_processed[
+                                        best_match_ID]._obj.get(
+                    "inchikey")[:14]
+                inchikey_query = documents_query_processed[ID]._obj.get(
+                    "inchikey")[:14]
+
+                best_bet = 1 * (inchikey_selected == inchikey_query)
+            else:
+                best_bet = -1  # meaning: not found
+            test_matches.append(best_bet)
+
+        # Make arrays from lists:
+        test_arr = np.array(test_matches)
+
+        test_matches_s2v.append([np.sum(test_arr == 1), np.sum(test_arr == 0),
+                                 np.sum(test_arr == -1)])
+
+    test_matches_s2v_mds = []
+
+    cosine_thresholds = np.arange(0, 1, 0.05)
+
+    for threshold in cosine_thresholds:
+        print(f"Checking matches for spec2vec score > {threshold:.2f}")
+        test_matches = []
+
+        for ID in range(len(documents_query_processed_with_mds)):
+
+            # Scenario 2: mass + sort by Spec2Vec
+            df_select = found_matches_processed_with_mds[ID][
+                (found_matches_processed_with_mds[ID]['mass_match'] == 1)
+                & (found_matches_processed_with_mds[ID][
+                       's2v_score'] > threshold)]
+            if df_select.shape[0] > 0:
+                best_match_ID = df_select.sort_values(
+                    by=['s2v_score'], ascending=False).index[0]
+                inchikey_selected = documents_library_processed_with_mds[
+                                        best_match_ID]._obj.get("inchikey")[
+                                    :14]
+                inchikey_query = documents_query_processed_with_mds[
+                                     ID]._obj.get("inchikey")[:14]
+
+                best_bet = 1 * (inchikey_selected == inchikey_query)
+            else:
+                best_bet = -1  # meaning: not found
+            test_matches.append(best_bet)
+
+        # Make arrays from lists:
+        test_arr = np.array(test_matches)
+
+        test_matches_s2v_mds.append(
+            [np.sum(test_arr == 1), np.sum(test_arr == 0),
+             np.sum(test_arr == -1)])
+
+    # make plots
+    min_match = 6
+
+    test_matches_cosine_arr = np.array(test_matches_min6)
+    test_matches_s2v_arr = np.array(test_matches_s2v)
+    test_matches_s2v_mds_arr = np.array(test_matches_s2v_mds)
+
+    thresholds = np.arange(0, 1, 0.05)
+    label_picks = [0, 4, 8, 12, 14, 15, 16, 17, 18, 19]
+
+    plt.figure(figsize=(7, 6))
+    plt.style.use('ggplot')
+    num_max = np.sum(test_matches_cosine_arr[0, :])
+
+    plt.plot(test_matches_s2v_arr[:, 1] / num_max,
+             test_matches_s2v_arr[:, 0] / num_max,
+             'o-', label='Spec2Vec')
+    plt.plot(test_matches_s2v_mds_arr[:, 1] / num_max,
+             test_matches_s2v_mds_arr[:, 0] / num_max,
+             'o-', label='Spec2Vec + MDs')
+    plt.plot(test_matches_cosine_arr[:, 1] / num_max,
+             test_matches_cosine_arr[:, 0] / num_max,
+             'o-', color='black',
+             label='cosine (min match = {})'.format(min_match))
+    for i, threshold in enumerate(thresholds):
+        if i in label_picks:
+            plt.annotate(">{:.2}".format(threshold),
+                         (test_matches_s2v_arr[i, 1] / num_max,
+                          test_matches_s2v_arr[i, 0] / num_max),
+                         textcoords="offset points", xytext=(2, -10),
+                         fontsize=12)
+            plt.annotate(">{:.2}".format(threshold),
+                         (test_matches_s2v_mds_arr[i, 1] / num_max,
+                          test_matches_s2v_mds_arr[i, 0] / num_max),
+                         textcoords="offset points", xytext=(2, -10),
+                         fontsize=12)
+            plt.annotate(">{:.2}".format(threshold),
+                         (test_matches_cosine_arr[i, 1] / num_max,
+                          test_matches_cosine_arr[i, 0] / num_max),
+                         textcoords="offset points", xytext=(2, -10),
+                         fontsize=12)
+
+    plt.title('true/false positives per query')
+    plt.legend(fontsize=14)
+    plt.xticks(fontsize=13)
+    plt.yticks(fontsize=13)
+    plt.xlabel('false positives rate', fontsize=16)
+    plt.ylabel('true positive rate', fontsize=16)
+    # plt.xlim([0, 0.3])
+    plt.savefig(os.path.join(
+        cmd.output_dir,
+        'library_matching_true_false_positives_labeled.svg'))
+    plt.close()
+
+    min_match = 2
+    test_matches_cosine_arr = np.array(test_matches_min2)
+    # test_matches_cosine_arr = np.array(test_matches_min6)
+    test_matches_s2v_arr = np.array(test_matches_s2v)
+    test_matches_s2v_mds_arr = np.array(test_matches_s2v_mds)
+
+    thresholds = np.arange(0, 1, 0.05)
+    label_picks = [0, 4, 8, 10, 12, 14, 15, 16, 17, 18, 19]
+
+    accuracy_s2v = 100 * test_matches_s2v_arr[:, 0] / (
+                test_matches_s2v_arr[:, 0] + test_matches_s2v_arr[:, 1])
+    accuracy_s2v_mds = 100 * test_matches_s2v_mds_arr[:, 0] / (
+                test_matches_s2v_mds_arr[:, 0] + test_matches_s2v_mds_arr[:,
+                                                 1])
+    accuracy_cosine = 100 * test_matches_cosine_arr[:, 0] / (
+                test_matches_cosine_arr[:, 0] + test_matches_cosine_arr[:, 1])
+
+    retrieval_s2v = (test_matches_s2v_arr[:, 1] + test_matches_s2v_arr[:,
+                                                  0]) / 1000
+    retrieval_s2v_mds = (test_matches_s2v_mds_arr[:,
+                         1] + test_matches_s2v_mds_arr[:, 0]) / 1000
+    retrieval_cosine = (test_matches_cosine_arr[:,
+                        1] + test_matches_cosine_arr[:, 0]) / 1000
+
+    plt.figure(figsize=(7, 6))
+    plt.style.use('ggplot')
+    plt.plot(retrieval_s2v, accuracy_s2v, 'o-', label='Spec2Vec')
+    plt.plot(retrieval_s2v_mds, accuracy_s2v_mds, 'o-', label='Spec2Vec + MDs')
+    plt.plot(retrieval_cosine, accuracy_cosine, 'o-', color="black",
+             label='cosine (min match = {})'.format(min_match))
+
+    for i, threshold in enumerate(thresholds):
+        if i in label_picks:
+            plt.annotate(">{:.2}".format(threshold),
+                         (retrieval_s2v[i], accuracy_s2v[i]),
+                         textcoords="offset points", xytext=(2, 5),
+                         fontsize=12)
+            plt.annotate(">{:.2}".format(threshold),
+                         (retrieval_s2v_mds[i], accuracy_s2v_mds[i]),
+                         textcoords="offset points", xytext=(2, 5),
+                         fontsize=12)
+            plt.annotate(">{:.2}".format(threshold),
+                         (retrieval_cosine[i], accuracy_cosine[i]),
+                         textcoords="offset points", xytext=(2, 5),
+                         fontsize=12)
+
+    plt.title('accuracy vs retrieval')
+    plt.legend(fontsize=14)
+    plt.xticks(fontsize=13)
+    plt.yticks(fontsize=13)
+    plt.ylim([74, 90])
+    plt.xlabel('retrieval (hits per query spectrum)', fontsize=16)
+    plt.ylabel('accuracy (% correct hits)', fontsize=16)
+    plt.savefig(os.path.join(
+        cmd.output_dir,
+        'library_matching_accuracy_vs_retrieval_minmatch2.svg'))
 
     end = time.time()
     print(f"\nFinished in {end - start:.3f} s")
