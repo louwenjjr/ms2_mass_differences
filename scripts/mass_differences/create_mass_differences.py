@@ -13,10 +13,10 @@ def get_mass_differences(spectrum_in: SpectrumType, cutoff: int = 36,
     spectrum_in:
         Spectrum in matchms.Spectrum format
     cutoff:
-        Mass cutoff for mass difference (like Xing et al.)
+        Mass cutoff for mass difference (default like Xing et al.)
     n_max:
         Maximum amount of mass differences to select, ranked on intensity
-        (like Xing et al.)
+        (default like Xing et al.)
     """
     if spectrum_in is None:
         return None
