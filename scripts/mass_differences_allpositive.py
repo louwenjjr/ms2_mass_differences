@@ -18,6 +18,7 @@ from mass_differences.create_mass_differences import convert_md_tup
 from mass_differences.utils import read_mds
 from mass_differences.validation_pipeline import select_query_spectra
 from mass_differences.validation_pipeline import library_matching_metrics
+from mass_differences.validation_pipeline import md_distribution_metrics
 from mass_differences.library_search import library_matching
 from mass_differences.plots import true_false_pos_plot
 from mass_differences.plots import accuracy_vs_retrieval_plot
@@ -176,10 +177,10 @@ if __name__ == "__main__":
         documents_library_processed,
         model,
         presearch_based_on=[
-           "precursor_mz",
-           "spec2vec-top20"],
+            "precursor_mz",
+            "spec2vec-top20"],
         include_scores=["cosine",
-                       "modcosine"],
+                        "modcosine"],
         ignore_non_annotated=True,
         intensity_weighting_power=0.5,
         allowed_missing_percentage=50.0,
@@ -191,9 +192,9 @@ if __name__ == "__main__":
         documents_library_classical,
         model,
         presearch_based_on=[
-           "precursor_mz"],
+            "precursor_mz"],
         include_scores=["cosine",
-                       "modcosine"],
+                        "modcosine"],
         ignore_non_annotated=True,
         intensity_weighting_power=0.5,
         allowed_missing_percentage=50.0,
@@ -232,6 +233,10 @@ if __name__ == "__main__":
         mass_tolerance_type="ppm")
 
     print("\nMaking metrics plots")
+    md_distribution_metrics(
+        documents_library_processed_with_mds +
+        documents_query_processed_with_mds, cmd.output_dir)
+
     test_matches_min2, test_matches_min6, test_matches_s2v, \
         test_matches_s2v_mds = library_matching_metrics(
             documents_query_classical, documents_library_classical,

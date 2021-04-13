@@ -4,6 +4,9 @@ import pandas as pd
 from typing import List, Tuple
 from matchms.typing import SpectrumType
 from spec2vec import SpectrumDocument
+from mass_differences.plots import mds_per_spec_plot
+from mass_differences.plots import md_words_frac_plot
+from mass_differences.plots import md_intensity_dist
 
 
 def select_query_spectra(spectrums: List[SpectrumType],
@@ -47,6 +50,49 @@ def select_query_spectra(spectrums: List[SpectrumType],
         matches = inchikeys_pd[inchikeys_pd.str[:14] == inchikey].index.values
         selected_spectra.append(int(np.random.choice(matches, 1)[0]))
     return selected_spectra
+
+
+def md_distribution_metrics(
+        documents_processed_with_mds: List[SpectrumDocument],
+        output_dir: str):
+    """Extract metrics on MDs from SpectrumDocuments and make plots
+
+    Parameters
+    ----------
+    documents_processed_with_mds:
+        SpectrumDocuments containing md@... as words as well as peaks/Nlosses
+    output_dir:
+        Directory to save the plot in
+    """
+    total_words = []
+    non_md_words = []
+    md_words = []
+    non_md_avg_intensity = []
+    md_avg_intensity = []
+
+    for doc in documents_processed_with_mds:
+        words = doc.words
+        total_w = len(words)
+        md_len = len([1 for w in words if w.startswith('md')])
+        non_md_len = total_w - md_len
+        md_ints = []
+        non_md_ints = []
+        for w, i in zip(doc.words, doc.weights):
+            if w.startswith('md'):
+                md_ints.append(i)
+            else:
+                non_md_ints.append(i)
+        if not md_ints:  # when there are no mds in a spectrum
+            md_ints = [0]
+        non_md_avg_intensity.append(np.mean(non_md_ints))
+        md_avg_intensity.append(np.mean(md_ints))
+        total_words.append(total_w)
+        non_md_words.append(non_md_len)
+        md_words.append(md_len)
+    # make plots
+    mds_per_spec_plot(non_md_words, md_words, output_dir)
+    md_words_frac_plot(md_words, total_words, output_dir)
+    md_intensity_dist(non_md_avg_intensity, md_avg_intensity, output_dir)
 
 
 def library_matching_metrics(
