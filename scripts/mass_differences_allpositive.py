@@ -11,8 +11,6 @@ import argparse
 import time
 import os
 import gensim
-import numpy as np
-import matplotlib.pyplot as plt
 from mass_differences.processing import processing_master
 from mass_differences.create_mass_differences import get_mass_differences
 from mass_differences.create_mass_differences import get_md_documents
