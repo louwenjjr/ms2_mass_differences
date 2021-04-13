@@ -19,6 +19,7 @@ from mass_differences.create_mass_differences import get_md_documents
 from mass_differences.create_mass_differences import convert_md_tup
 from mass_differences.utils import read_mds
 from mass_differences.validation_pipeline import select_query_spectra
+from mass_differences.validation_pipeline import library_matching_metrics
 from mass_differences.library_search import library_matching
 from mass_differences.plots import true_false_pos_plot
 from mass_differences.plots import accuracy_vs_retrieval_plot
@@ -233,144 +234,14 @@ if __name__ == "__main__":
         mass_tolerance_type="ppm")
 
     print("\nMaking metrics plots")
-    min_match = 2
-    cosine_thresholds = np.arange(0, 1, 0.05)
-
-    test_matches_min2 = []
-    for threshold in cosine_thresholds:
-        # print(f"Checking matches for cosine score > {threshold:.2f}")
-        test_matches = []
-
-        for ID in range(len(documents_query_classical)):
-            if len(found_matches_classical[ID]) > 0:
-                # Scenario 1: mass + sort by cosine
-                df_select = found_matches_classical[ID][
-                    (found_matches_classical[ID]['mass_match'] == 1)
-                    & (found_matches_classical[ID]['cosine_score'] > threshold)
-                    & (found_matches_classical[ID][
-                           'cosine_matches'] >= min_match)]
-
-                if df_select.shape[0] > 0:
-                    best_match_ID = df_select.sort_values(
-                        by=['cosine_score'], ascending=False).index[0]
-                    inchikey_selected = documents_library_classical[
-                                            best_match_ID]._obj.get(
-                        "inchikey")[:14]
-                    inchikey_query = documents_query_classical[ID]._obj.get(
-                        "inchikey")[:14]
-
-                    best_bet = 1 * (inchikey_selected == inchikey_query)
-                else:
-                    best_bet = -1  # meaning: not found
-                test_matches.append(best_bet)
-
-        # Make arrays from lists:
-        test_arr = np.array(test_matches)
-
-        test_matches_min2.append([np.sum(test_arr == 1), np.sum(test_arr == 0),
-                                  np.sum(test_arr == -1)])
-
-    min_match = 6
-    test_matches_min6 = []
-    for threshold in cosine_thresholds:
-        # print(f"Checking matches for cosine score > {threshold:.2f}")
-        test_matches = []
-
-        for ID in range(len(documents_query_classical)):
-            if len(found_matches_classical[ID]) > 0:
-                # Scenario 1: mass + sort by cosine
-                df_select = found_matches_classical[ID][
-                    (found_matches_classical[ID]['mass_match'] == 1)
-                    & (found_matches_classical[ID]['cosine_score'] > threshold)
-                    & (found_matches_classical[ID][
-                           'cosine_matches'] >= min_match)]
-
-                if df_select.shape[0] > 0:
-                    best_match_ID = df_select.sort_values(
-                        by=['cosine_score'], ascending=False).index[0]
-                    inchikey_selected = documents_library_classical[
-                                            best_match_ID]._obj.get(
-                        "inchikey")[:14]
-                    inchikey_query = documents_query_classical[ID]._obj.get(
-                        "inchikey")[:14]
-
-                    best_bet = 1 * (inchikey_selected == inchikey_query)
-                else:
-                    best_bet = -1  # meaning: not found
-                test_matches.append(best_bet)
-
-        # Make arrays from lists:
-        test_arr = np.array(test_matches)
-
-        test_matches_min6.append([np.sum(test_arr == 1), np.sum(test_arr == 0),
-                                  np.sum(test_arr == -1)])
-
-    test_matches_s2v = []
-    for threshold in cosine_thresholds:
-        # print(f"Checking matches for spec2vec score > {threshold:.2f}")
-        test_matches = []
-
-        for ID in range(len(documents_query_processed)):
-
-            # Scenario 2: mass + sort by Spec2Vec
-            df_select = found_matches_processed[ID][
-                (found_matches_processed[ID]['mass_match'] == 1)
-                & (found_matches_processed[ID]['s2v_score'] > threshold)]
-            if df_select.shape[0] > 0:
-                best_match_ID = df_select.sort_values(
-                    by=['s2v_score'], ascending=False).index[0]
-                inchikey_selected = documents_library_processed[
-                                        best_match_ID]._obj.get(
-                    "inchikey")[:14]
-                inchikey_query = documents_query_processed[ID]._obj.get(
-                    "inchikey")[:14]
-
-                best_bet = 1 * (inchikey_selected == inchikey_query)
-            else:
-                best_bet = -1  # meaning: not found
-            test_matches.append(best_bet)
-
-        # Make arrays from lists:
-        test_arr = np.array(test_matches)
-
-        test_matches_s2v.append([np.sum(test_arr == 1), np.sum(test_arr == 0),
-                                 np.sum(test_arr == -1)])
-
-    test_matches_s2v_mds = []
-
-    cosine_thresholds = np.arange(0, 1, 0.05)
-
-    for threshold in cosine_thresholds:
-        # print(f"Checking matches for spec2vec score > {threshold:.2f}")
-        test_matches = []
-
-        for ID in range(len(documents_query_processed_with_mds)):
-
-            # Scenario 2: mass + sort by Spec2Vec
-            df_select = found_matches_processed_with_mds[ID][
-                (found_matches_processed_with_mds[ID]['mass_match'] == 1)
-                & (found_matches_processed_with_mds[ID][
-                       's2v_score'] > threshold)]
-            if df_select.shape[0] > 0:
-                best_match_ID = df_select.sort_values(
-                    by=['s2v_score'], ascending=False).index[0]
-                inchikey_selected = documents_library_processed_with_mds[
-                                        best_match_ID]._obj.get("inchikey")[
-                                    :14]
-                inchikey_query = documents_query_processed_with_mds[
-                                     ID]._obj.get("inchikey")[:14]
-
-                best_bet = 1 * (inchikey_selected == inchikey_query)
-            else:
-                best_bet = -1  # meaning: not found
-            test_matches.append(best_bet)
-
-        # Make arrays from lists:
-        test_arr = np.array(test_matches)
-
-        test_matches_s2v_mds.append(
-            [np.sum(test_arr == 1), np.sum(test_arr == 0),
-             np.sum(test_arr == -1)])
+    test_matches_min2, test_matches_min6, test_matches_s2v, \
+        test_matches_s2v_mds = library_matching_metrics(
+            documents_query_classical, documents_library_classical,
+            found_matches_classical, documents_query_processed,
+            documents_library_processed, found_matches_processed,
+            documents_query_processed_with_mds,
+            documents_library_processed_with_mds,
+            found_matches_processed_with_mds)
 
     # make plots
     true_false_pos_plot(test_matches_min6, test_matches_s2v,
