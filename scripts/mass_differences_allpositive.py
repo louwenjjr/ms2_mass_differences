@@ -12,7 +12,6 @@ import time
 import os
 import gensim
 import numpy as np
-import pandas as pd
 import matplotlib.pyplot as plt
 from mass_differences.processing import processing_master
 from mass_differences.create_mass_differences import get_mass_differences
@@ -21,6 +20,8 @@ from mass_differences.create_mass_differences import convert_md_tup
 from mass_differences.utils import read_mds
 from mass_differences.validation_pipeline import select_query_spectra
 from mass_differences.library_search import library_matching
+from mass_differences.plots import true_false_pos_plot
+from mass_differences.plots import accuracy_vs_retrieval_plot
 from spec2vec import SpectrumDocument
 from spec2vec.model_building import train_new_word2vec_model
 from copy import deepcopy
@@ -231,12 +232,13 @@ if __name__ == "__main__":
         mass_tolerance=1.0,
         mass_tolerance_type="ppm")
 
+    print("\nMaking metrics plots")
     min_match = 2
     cosine_thresholds = np.arange(0, 1, 0.05)
 
     test_matches_min2 = []
     for threshold in cosine_thresholds:
-        print(f"Checking matches for cosine score > {threshold:.2f}")
+        # print(f"Checking matches for cosine score > {threshold:.2f}")
         test_matches = []
 
         for ID in range(len(documents_query_classical)):
@@ -271,7 +273,7 @@ if __name__ == "__main__":
     min_match = 6
     test_matches_min6 = []
     for threshold in cosine_thresholds:
-        print(f"Checking matches for cosine score > {threshold:.2f}")
+        # print(f"Checking matches for cosine score > {threshold:.2f}")
         test_matches = []
 
         for ID in range(len(documents_query_classical)):
@@ -305,7 +307,7 @@ if __name__ == "__main__":
 
     test_matches_s2v = []
     for threshold in cosine_thresholds:
-        print(f"Checking matches for spec2vec score > {threshold:.2f}")
+        # print(f"Checking matches for spec2vec score > {threshold:.2f}")
         test_matches = []
 
         for ID in range(len(documents_query_processed)):
@@ -339,7 +341,7 @@ if __name__ == "__main__":
     cosine_thresholds = np.arange(0, 1, 0.05)
 
     for threshold in cosine_thresholds:
-        print(f"Checking matches for spec2vec score > {threshold:.2f}")
+        # print(f"Checking matches for spec2vec score > {threshold:.2f}")
         test_matches = []
 
         for ID in range(len(documents_query_processed_with_mds)):
@@ -371,115 +373,12 @@ if __name__ == "__main__":
              np.sum(test_arr == -1)])
 
     # make plots
-    min_match = 6
+    true_false_pos_plot(test_matches_min6, test_matches_s2v,
+                        test_matches_s2v_mds, cmd.output_dir, min_match=6)
 
-    test_matches_cosine_arr = np.array(test_matches_min6)
-    test_matches_s2v_arr = np.array(test_matches_s2v)
-    test_matches_s2v_mds_arr = np.array(test_matches_s2v_mds)
-
-    thresholds = np.arange(0, 1, 0.05)
-    label_picks = [0, 4, 8, 12, 14, 15, 16, 17, 18, 19]
-
-    plt.figure(figsize=(7, 6))
-    plt.style.use('ggplot')
-    num_max = np.sum(test_matches_cosine_arr[0, :])
-
-    plt.plot(test_matches_s2v_arr[:, 1] / num_max,
-             test_matches_s2v_arr[:, 0] / num_max,
-             'o-', label='Spec2Vec')
-    plt.plot(test_matches_s2v_mds_arr[:, 1] / num_max,
-             test_matches_s2v_mds_arr[:, 0] / num_max,
-             'o-', label='Spec2Vec + MDs')
-    plt.plot(test_matches_cosine_arr[:, 1] / num_max,
-             test_matches_cosine_arr[:, 0] / num_max,
-             'o-', color='black',
-             label='cosine (min match = {})'.format(min_match))
-    for i, threshold in enumerate(thresholds):
-        if i in label_picks:
-            plt.annotate(">{:.2}".format(threshold),
-                         (test_matches_s2v_arr[i, 1] / num_max,
-                          test_matches_s2v_arr[i, 0] / num_max),
-                         textcoords="offset points", xytext=(2, -10),
-                         fontsize=12)
-            plt.annotate(">{:.2}".format(threshold),
-                         (test_matches_s2v_mds_arr[i, 1] / num_max,
-                          test_matches_s2v_mds_arr[i, 0] / num_max),
-                         textcoords="offset points", xytext=(2, -10),
-                         fontsize=12)
-            plt.annotate(">{:.2}".format(threshold),
-                         (test_matches_cosine_arr[i, 1] / num_max,
-                          test_matches_cosine_arr[i, 0] / num_max),
-                         textcoords="offset points", xytext=(2, -10),
-                         fontsize=12)
-
-    plt.title('true/false positives per query')
-    plt.legend(fontsize=14)
-    plt.xticks(fontsize=13)
-    plt.yticks(fontsize=13)
-    plt.xlabel('false positives rate', fontsize=16)
-    plt.ylabel('true positive rate', fontsize=16)
-    # plt.xlim([0, 0.3])
-    plt.savefig(os.path.join(
-        cmd.output_dir,
-        'library_matching_true_false_positives_labeled.svg'))
-    plt.close()
-
-    min_match = 2
-    test_matches_cosine_arr = np.array(test_matches_min2)
-    # test_matches_cosine_arr = np.array(test_matches_min6)
-    test_matches_s2v_arr = np.array(test_matches_s2v)
-    test_matches_s2v_mds_arr = np.array(test_matches_s2v_mds)
-
-    thresholds = np.arange(0, 1, 0.05)
-    label_picks = [0, 4, 8, 10, 12, 14, 15, 16, 17, 18, 19]
-
-    accuracy_s2v = 100 * test_matches_s2v_arr[:, 0] / (
-                test_matches_s2v_arr[:, 0] + test_matches_s2v_arr[:, 1])
-    accuracy_s2v_mds = 100 * test_matches_s2v_mds_arr[:, 0] / (
-                test_matches_s2v_mds_arr[:, 0] + test_matches_s2v_mds_arr[:,
-                                                 1])
-    accuracy_cosine = 100 * test_matches_cosine_arr[:, 0] / (
-                test_matches_cosine_arr[:, 0] + test_matches_cosine_arr[:, 1])
-
-    retrieval_s2v = (test_matches_s2v_arr[:, 1] + test_matches_s2v_arr[:,
-                                                  0]) / 1000
-    retrieval_s2v_mds = (test_matches_s2v_mds_arr[:,
-                         1] + test_matches_s2v_mds_arr[:, 0]) / 1000
-    retrieval_cosine = (test_matches_cosine_arr[:,
-                        1] + test_matches_cosine_arr[:, 0]) / 1000
-
-    plt.figure(figsize=(7, 6))
-    plt.style.use('ggplot')
-    plt.plot(retrieval_s2v, accuracy_s2v, 'o-', label='Spec2Vec')
-    plt.plot(retrieval_s2v_mds, accuracy_s2v_mds, 'o-', label='Spec2Vec + MDs')
-    plt.plot(retrieval_cosine, accuracy_cosine, 'o-', color="black",
-             label='cosine (min match = {})'.format(min_match))
-
-    for i, threshold in enumerate(thresholds):
-        if i in label_picks:
-            plt.annotate(">{:.2}".format(threshold),
-                         (retrieval_s2v[i], accuracy_s2v[i]),
-                         textcoords="offset points", xytext=(2, 5),
-                         fontsize=12)
-            plt.annotate(">{:.2}".format(threshold),
-                         (retrieval_s2v_mds[i], accuracy_s2v_mds[i]),
-                         textcoords="offset points", xytext=(2, 5),
-                         fontsize=12)
-            plt.annotate(">{:.2}".format(threshold),
-                         (retrieval_cosine[i], accuracy_cosine[i]),
-                         textcoords="offset points", xytext=(2, 5),
-                         fontsize=12)
-
-    plt.title('accuracy vs retrieval')
-    plt.legend(fontsize=14)
-    plt.xticks(fontsize=13)
-    plt.yticks(fontsize=13)
-    plt.ylim([74, 90])
-    plt.xlabel('retrieval (hits per query spectrum)', fontsize=16)
-    plt.ylabel('accuracy (% correct hits)', fontsize=16)
-    plt.savefig(os.path.join(
-        cmd.output_dir,
-        'library_matching_accuracy_vs_retrieval_minmatch2.svg'))
+    accuracy_vs_retrieval_plot(
+        test_matches_min2, test_matches_s2v, test_matches_s2v_mds,
+        cmd.output_dir, min_match=2)
 
     end = time.time()
     print(f"\nFinished in {end - start:.3f} s")
