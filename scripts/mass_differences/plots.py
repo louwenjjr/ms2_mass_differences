@@ -23,7 +23,7 @@ def mds_per_spec_plot(non_md_words: List[int], md_words: List[int],
     plt.ylabel('MDs per spectrum')
     plt.savefig(os.path.join(
         output_dir,
-        'MDs_per_spectrum.svg'))
+        'MDs_per_spectrum.png'))
 
 
 def md_words_frac_plot(md_words, total_words, output_dir):
@@ -44,7 +44,7 @@ def md_words_frac_plot(md_words, total_words, output_dir):
     plt.ylabel('Counts')
     plt.savefig(os.path.join(
         output_dir,
-        'MD_fraction_per_spectrum.svg'))
+        'MD_fraction_per_spectrum.png'))
 
 
 def md_intensity_dist(non_md_avg_intensity: List[np.ndarray],
@@ -68,7 +68,7 @@ def md_intensity_dist(non_md_avg_intensity: List[np.ndarray],
     plt.ylim((0, 1))
     plt.savefig(os.path.join(
         output_dir,
-        'MD_intensities_distribution.svg'))
+        'MD_intensities_distribution.png'))
 
 
 def true_false_pos_plot(test_matches_cos: List[List[np.ndarray]],
