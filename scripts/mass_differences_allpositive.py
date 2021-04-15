@@ -237,14 +237,21 @@ if __name__ == "__main__":
         documents_library_processed_with_mds +
         documents_query_processed_with_mds, cmd.output_dir)
 
+    all_lib_matching_metrics = library_matching_metrics(
+        documents_query_classical, documents_library_classical,
+        found_matches_classical, documents_query_processed,
+        documents_library_processed, found_matches_processed,
+        documents_query_processed_with_mds,
+        documents_library_processed_with_mds,
+        found_matches_processed_with_mds)
+    # save metrics to be used in other plots
+    lib_metrics_file = os.path.join(cmd.output_dir,
+                                    'lib_matching_metrics.pickle')
+    with open(lib_metrics_file, 'wb') as outf:
+        pickle.dump(all_lib_matching_metrics, outf)
+
     test_matches_min2, test_matches_min6, test_matches_s2v, \
-        test_matches_s2v_mds = library_matching_metrics(
-            documents_query_classical, documents_library_classical,
-            found_matches_classical, documents_query_processed,
-            documents_library_processed, found_matches_processed,
-            documents_query_processed_with_mds,
-            documents_library_processed_with_mds,
-            found_matches_processed_with_mds)
+        test_matches_s2v_mds = all_lib_matching_metrics
 
     # make plots
     true_false_pos_plot(test_matches_min6, test_matches_s2v,
