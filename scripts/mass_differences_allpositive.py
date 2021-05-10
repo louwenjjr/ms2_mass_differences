@@ -234,8 +234,7 @@ if __name__ == "__main__":
 
     print("\nMaking metrics plots")
     md_distribution_metrics(
-        documents_library_processed_with_mds +
-        documents_query_processed_with_mds, cmd.output_dir)
+        documents_library_processed_with_mds, cmd.output_dir)
 
     all_lib_matching_metrics = library_matching_metrics(
         documents_query_classical, documents_library_classical,
