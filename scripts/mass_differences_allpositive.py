@@ -119,8 +119,11 @@ if __name__ == "__main__":
 
     md_documents = get_md_documents(mass_differences,
                                     n_decimals=cmd.binning_precision)
-    all_unfiltered_mds = [md_doc[0] for md_doc in md_documents]
-    print(f"\n{all_unfiltered_mds} unfiltered MDs present")
+    all_unfiltered_mds = set()
+    for md_doc in md_documents:
+        for md in md_doc:
+            all_unfiltered_mds.add(md[0])
+    print(f"\n{len(all_unfiltered_mds)} unfiltered MDs present")
     print(f"{len(md_documents)} remaining MD documents (spectra).")
     print("An example:", md_documents[-1])
     if not mds_to_use:
