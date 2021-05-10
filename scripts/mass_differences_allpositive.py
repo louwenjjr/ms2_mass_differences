@@ -43,6 +43,13 @@ def get_commands() -> argparse.Namespace:
         containing list of mass differences to use. Should be a tab delim file\
         with mass differences in first column. A header is expected! Default:\
         use all mass differences found with other parameters", default=False)
+    parser.add_argument("-w", "--white_listed_mds", metavar="<.txt>", help="\
+        Text file containing list of white listed mass differences to use.\
+        These mass differences will be added regardless of other parameters\
+        such as requiring in-spectrum count of 2. Should be a tab delim file\
+        with mass differences in first column. A header is expected! Default:\
+        use all mass differences from --mds with other filtering options",
+                        default=False)
     parser.add_argument("-s", "--s2v_embedding", metavar="<.model>", help="Use\
         an existing Spec2Vec embedding instead of training a new one, default:\
         False", default=False)
@@ -57,10 +64,12 @@ def get_commands() -> argparse.Namespace:
     parser.add_argument("-b", "--binning_precision",
                         help="Number of decimals to bin on, default: 2",
                         type=int, default=2)
-    parser.add_argument("-p", "--punish_intensities",
-                        help="Toggle to punish intensities of mass\
-                        differences",
-                        action="store_true", default=False)
+    parser.add_argument("-p", "--punish_intensities", help="Toggle to punish\
+        intensities of mass differences", action="store_true", default=False)
+    parser.add_argument("--require_in_count", help="Require mass differences\
+        to occur X times in spectrum to be taken into account, with the\
+        exception of --white_listed_mds, default: 1",
+                        default=1, type=int)
     parser.add_argument("--max_mds_per_peak", help="Limit the\
         maximum number of mass differences that can be derived from one peak,\
         default: 30", default=30, type=int)
@@ -79,12 +88,21 @@ if __name__ == "__main__":
     print("Writing output to", cmd.output_dir)
 
     if not cmd.mds:
-        white_listed_mds = False
+        mds_to_use = False
         print("\nNo MDs found as input, all UNFILTERED found mass differences\
             will be used!")
     else:
         print("\nRead list of mass difference to use")
-        white_listed_mds = read_mds(cmd.mds, n_decimals=cmd.binning_precision)
+        mds_to_use = read_mds(cmd.mds, n_decimals=cmd.binning_precision)
+
+    if not cmd.white_listed_mds:
+        white_listed_mds = []
+        print("\nNo white listed MDs found as input, all mass differences\
+            will be subjected to other selection criteria.")
+    else:
+        print("\nRead list of mass difference to use")
+        white_listed_mds = read_mds(cmd.white_listed_mds,
+                                    n_decimals=cmd.binning_precision)
 
     input_spectrums = pickle.load(open(cmd.input_file, 'rb'))
     processing_res = processing_master(
@@ -101,8 +119,12 @@ if __name__ == "__main__":
 
     md_documents = get_md_documents(mass_differences,
                                     n_decimals=cmd.binning_precision)
-    print(f"\n{len(md_documents)} remaining MD documents (spectra).")
+    all_unfiltered_mds = [md_doc[0] for md_doc in md_documents]
+    print(f"\n{all_unfiltered_mds} unfiltered MDs present")
+    print(f"{len(md_documents)} remaining MD documents (spectra).")
     print("An example:", md_documents[-1])
+    if not mds_to_use:
+        mds_to_use = all_unfiltered_mds
 
     # validation pipeline
     spectrums_top30, spectrums_processed, spectrums_classical = processing_res
@@ -133,16 +155,30 @@ if __name__ == "__main__":
     documents_library_mds = [md_doc for i, md_doc in enumerate(md_documents) if
                              i not in selected_spectra]
     documents_library_processed_with_mds = []
-    set_chosen_mds = set(white_listed_mds)
+    set_white_listed_mds = set(white_listed_mds)
+    set_chosen_mds = set(mds_to_use)
     c_multiply = True  # multiply intensities with sqrt of count
     for doc, md_doc in zip(documents_library_processed, documents_library_mds):
         new_doc = deepcopy(doc)  # make sure original doc is not affected
 
-        processed_mds = [
-            convert_md_tup(md,
-                           count_multiplier=c_multiply,
-                           punish=cmd.punish_intensities)
-            for md in md_doc if md[0] in set_chosen_mds]
+        processed_mds = []
+        for md in md_doc:
+            proc_md = False
+            if md[0] in set_white_listed_mds:
+                # if md present in both sets, this will happen first
+                proc_md = convert_md_tup(md,
+                                         count_multiplier=c_multiply,
+                                         punish=cmd.punish_intensities,
+                                         in_count_cutoff=1)
+            elif md[0] in set_chosen_mds:
+                proc_md = convert_md_tup(md,
+                                         count_multiplier=c_multiply,
+                                         punish=cmd.punish_intensities,
+                                         in_count_cutoff=cmd.require_in_count)
+
+            if proc_md:
+                processed_mds.append(proc_md)
+
         if processed_mds:
             md_words, md_intensities = zip(*processed_mds)
             new_doc.words.extend(md_words)
@@ -205,12 +241,26 @@ if __name__ == "__main__":
     documents_query_mds = [md_doc for i, md_doc in enumerate(md_documents) if
                            i in selected_spectra]
     documents_query_processed_with_mds = []
-    set_chosen_mds = set(white_listed_mds)
     for doc, md_doc in zip(documents_query_processed, documents_query_mds):
         new_doc = deepcopy(doc)  # make sure original doc is not affected
 
-        processed_mds = [convert_md_tup(md) for md in md_doc if
-                         md[0] in set_chosen_mds]
+        processed_mds = []
+        for md in md_doc:
+            proc_md = False
+            if md[0] in set_white_listed_mds:
+                # if md present in both sets, this will happen first
+                proc_md = convert_md_tup(md,
+                                         count_multiplier=c_multiply,
+                                         punish=cmd.punish_intensities,
+                                         in_count_cutoff=1)
+            elif md[0] in set_chosen_mds:
+                proc_md = convert_md_tup(md,
+                                         count_multiplier=c_multiply,
+                                         punish=cmd.punish_intensities,
+                                         in_count_cutoff=cmd.require_in_count)
+
+            if proc_md:
+                processed_mds.append(proc_md)
         if processed_mds:
             md_words, md_intensities = zip(*processed_mds)
             new_doc.words.extend(md_words)
@@ -250,7 +300,7 @@ if __name__ == "__main__":
         pickle.dump(all_lib_matching_metrics, outf)
 
     test_matches_min2, test_matches_min6, test_matches_s2v, \
-        test_matches_s2v_mds = all_lib_matching_metrics
+    test_matches_s2v_mds = all_lib_matching_metrics
 
     # make plots
     true_false_pos_plot(test_matches_min6, test_matches_s2v,

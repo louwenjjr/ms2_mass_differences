@@ -100,7 +100,8 @@ def get_md_documents(mass_differences: List[Spikes],
 
 def convert_md_tup(md_tup: Tuple[str, List[float], int],
                    count_multiplier: bool = True,
-                   punish: bool = False) -> Tuple[str, float]:
+                   punish: bool = False,
+                   in_count_cutoff: int = 1) -> Union[None, Tuple[str, float]]:
     """Convert md_tup to (word, intensity)
 
     Parameters
@@ -111,13 +112,18 @@ def convert_md_tup(md_tup: Tuple[str, List[float], int],
         Add bonus if MD occurs multiple times in the spectrum: * sqrt(count)
     punish:
         Punish MD intensity by dividing by 2
+    in_count_cutoff:
+        Require count X for the md_tup to be returned
     """
     word = f"md@{md_tup[0]}"
     intensity = max(md_tup[1])
+    count = md_tup[2]
+    if in_count_cutoff > count:
+        return None
     if punish:
         intensity = intensity / 2
     if count_multiplier:
-        intensity = intensity * np.sqrt(md_tup[2])
+        intensity = intensity * np.sqrt(count)
     if intensity > 1:
         intensity = 1.0
     return word, intensity
