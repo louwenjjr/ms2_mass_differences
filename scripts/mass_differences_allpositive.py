@@ -203,21 +203,28 @@ if __name__ == "__main__":
     uniq_documents_processed = [documents_processed[i] for i in uniq_ids]
     uniq_documents_mds = [md_spectrum_documents[i] for i in uniq_ids]
     # normal s2v similarities
-    spec2vec_similarity = Spec2Vec(model, intensity_weighting_power=0.5)
-    similarity_matrix = spec2vec_similarity.matrix(
-        uniq_documents_processed, uniq_documents_processed, is_symmetric=True)
     sims_out = os.path.join(
         cmd.output_dir,
         'similarities_unique_inchikey_spec2vec_librarymodel.npy')
-    np.save(sims_out, similarity_matrix)
+    if not os.path.exists(sims_out):
+        spec2vec_similarity = Spec2Vec(model, intensity_weighting_power=0.5)
+        similarity_matrix = spec2vec_similarity.matrix(
+            uniq_documents_processed, uniq_documents_processed, is_symmetric=True)
+        np.save(sims_out, similarity_matrix)
+    else:
+        similarity_matrix = np.load(sims_out)
+
     # md s2v similarities
-    md_spec2vec_similarity = Spec2Vec(model_mds, intensity_weighting_power=0.5)
-    md_similarity_matrix = spec2vec_similarity.matrix(
-        uniq_documents_mds, uniq_documents_mds, is_symmetric=True)
     md_sims_out = os.path.join(
         cmd.output_dir,
         'similarities_unique_inchikey_mds_spec2vec_librarymodel.npy')
-    np.save(md_sims_out, md_similarity_matrix)
+    if not os.path.exists(md_sims_out):
+        md_spec2vec_similarity = Spec2Vec(model_mds, intensity_weighting_power=0.5)
+        md_similarity_matrix = md_spec2vec_similarity.matrix(
+            uniq_documents_mds, uniq_documents_mds, is_symmetric=True)
+        np.save(md_sims_out, md_similarity_matrix)
+    else:
+        md_similarity_matrix = np.load(md_sims_out)
 
     # library matching
     documents_query_processed = [
