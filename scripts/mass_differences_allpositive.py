@@ -11,6 +11,7 @@ import argparse
 import time
 import os
 import gensim
+import numpy as np
 from mass_differences.processing import processing_master
 from mass_differences.processing import get_ids_for_unique_inchikeys
 from mass_differences.create_mass_differences import get_mass_differences
@@ -24,7 +25,7 @@ from mass_differences.validation_pipeline import md_distribution_metrics
 from mass_differences.library_search import library_matching
 from mass_differences.plots import true_false_pos_plot
 from mass_differences.plots import accuracy_vs_retrieval_plot
-from spec2vec import SpectrumDocument
+from spec2vec import SpectrumDocument, Spec2Vec
 from spec2vec.model_building import train_new_word2vec_model
 from copy import deepcopy
 
@@ -196,6 +197,27 @@ if __name__ == "__main__":
               model_file_mds)
         model_mds = gensim.models.Word2Vec.load(model_file_mds)
     print("MDs Spec2Vec model:", model_mds)
+
+    # similarity calculations (1st UniqueInchikey figure in Spec2Vec paper)
+    uniq_ids = get_ids_for_unique_inchikeys(spectrums_processed)
+    uniq_documents_processed = [documents_processed[i] for i in uniq_ids]
+    uniq_documents_mds = [md_spectrum_documents[i] for i in uniq_ids]
+    # normal s2v similarities
+    spec2vec_similarity = Spec2Vec(model, intensity_weighting_power=0.5)
+    similarity_matrix = spec2vec_similarity.matrix(
+        uniq_documents_processed, uniq_documents_processed, is_symmetric=True)
+    sims_out = os.path.join(
+        cmd.output_dir,
+        'similarities_unique_inchikey_spec2vec_librarymodel.npy')
+    np.save(sims_out, similarity_matrix)
+    # md s2v similarities
+    md_spec2vec_similarity = Spec2Vec(model_mds, intensity_weighting_power=0.5)
+    md_similarity_matrix = spec2vec_similarity.matrix(
+        uniq_documents_mds, uniq_documents_mds, is_symmetric=True)
+    md_sims_out = os.path.join(
+        cmd.output_dir,
+        'similarities_unique_inchikey_mds_spec2vec_librarymodel.npy')
+    np.save(md_sims_out, md_similarity_matrix)
 
     # library matching
     documents_query_processed = [
