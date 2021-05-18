@@ -15,7 +15,8 @@ from mass_differences.processing import processing_master
 from mass_differences.processing import get_ids_for_unique_inchikeys
 from mass_differences.create_mass_differences import get_mass_differences
 from mass_differences.create_mass_differences import get_md_documents
-from mass_differences.create_mass_differences import convert_md_tup
+from mass_differences.create_mass_differences import \
+    create_md_spectrum_documents
 from mass_differences.utils import read_mds
 from mass_differences.validation_pipeline import select_query_spectra
 from mass_differences.validation_pipeline import library_matching_metrics
@@ -156,40 +157,21 @@ if __name__ == "__main__":
     print("Normal Spec2Vecmodel:", model)
 
     # train new embedding for Spec2Vec + MDs
-    documents_library_mds = [md_doc for i, md_doc in enumerate(md_documents) if
-                             i not in selected_spectra]
+    # first create md spectrum documents
     documents_library_processed_with_mds = []
+    documents_query_processed_with_mds = []
     set_white_listed_mds = set(white_listed_mds)
     set_chosen_mds = set(mds_to_use)
     c_multiply = True  # multiply intensities with sqrt of count
-    for doc, md_doc in zip(documents_library_processed, documents_library_mds):
-        new_doc = deepcopy(doc)  # make sure original doc is not affected
-
-        processed_mds = []
-        for md in md_doc:
-            proc_md = False
-            if md[0] in set_white_listed_mds:
-                # if md present in both sets, this will happen first
-                proc_md = convert_md_tup(md,
-                                         count_multiplier=c_multiply,
-                                         punish=cmd.punish_intensities,
-                                         in_count_cutoff=1)
-            elif md[0] in set_chosen_mds:
-                proc_md = convert_md_tup(md,
-                                         count_multiplier=c_multiply,
-                                         punish=cmd.punish_intensities,
-                                         in_count_cutoff=cmd.require_in_count)
-
-            if proc_md:
-                processed_mds.append(proc_md)
-
-        if processed_mds:
-            md_words, md_intensities = zip(*processed_mds)
-            new_doc.words.extend(md_words)
-            new_doc.weights.extend(md_intensities)
-        assert len(new_doc.words) == len(new_doc.weights)
-
-        documents_library_processed_with_mds.append(new_doc)
+    md_spectrum_documents = create_md_spectrum_documents(
+        md_documents, spectrums_processed, set_white_listed_mds,
+        set_chosen_mds, c_multiply, cmd.punish_intensities,
+        cmd.require_in_count)
+    for i, new_md_doc in enumerate(md_spectrum_documents):
+        if i in selected_spectra:
+            documents_query_processed_with_mds.append(new_md_doc)
+        else:
+            documents_library_processed_with_mds.append(new_md_doc)
 
     if not cmd.existing_md_embedding:
         model_file_mds = os.path.join(
@@ -241,38 +223,8 @@ if __name__ == "__main__":
         cosine_tol=0.005,
         mass_tolerance=1.0,
         mass_tolerance_type="ppm")
+
     # library matching for MDs
-    documents_query_mds = [md_doc for i, md_doc in enumerate(md_documents) if
-                           i in selected_spectra]
-    documents_query_processed_with_mds = []
-    for doc, md_doc in zip(documents_query_processed, documents_query_mds):
-        new_doc = deepcopy(doc)  # make sure original doc is not affected
-
-        processed_mds = []
-        for md in md_doc:
-            proc_md = False
-            if md[0] in set_white_listed_mds:
-                # if md present in both sets, this will happen first
-                proc_md = convert_md_tup(md,
-                                         count_multiplier=c_multiply,
-                                         punish=cmd.punish_intensities,
-                                         in_count_cutoff=1)
-            elif md[0] in set_chosen_mds:
-                proc_md = convert_md_tup(md,
-                                         count_multiplier=c_multiply,
-                                         punish=cmd.punish_intensities,
-                                         in_count_cutoff=cmd.require_in_count)
-
-            if proc_md:
-                processed_mds.append(proc_md)
-        if processed_mds:
-            md_words, md_intensities = zip(*processed_mds)
-            new_doc.words.extend(md_words)
-            new_doc.weights.extend(md_intensities)
-        assert len(new_doc.words) == len(new_doc.weights)
-
-        documents_query_processed_with_mds.append(new_doc)
-
     found_matches_processed_with_mds = library_matching(
         documents_query_processed_with_mds,
         documents_library_processed_with_mds,

@@ -4,6 +4,7 @@ from typing import Union, List, Tuple
 from collections import defaultdict
 from matchms.Spikes import Spikes
 from matchms.typing import SpectrumType
+from spec2vec import SpectrumDocument
 
 
 def get_mass_differences(spectrum_in: SpectrumType, multiply: bool = False,
@@ -127,3 +128,62 @@ def convert_md_tup(md_tup: Tuple[str, List[float], int],
     if intensity > 1:
         intensity = 1.0
     return word, intensity
+
+
+def create_md_spectrum_documents(
+        md_documents: List[List[Tuple[str, List[float], int]]],
+        spectrums_processed: List[SpectrumType],
+        set_white_listed_mds: set,
+        set_chosen_mds: set,
+        c_multiply: bool,
+        punish_intensities: bool,
+        require_in_count: int) -> List[SpectrumDocument]:
+    """Make SpectrumDocuments for spectra with MDs
+
+    Parameters
+    ----------
+    md_documents:
+        List of 'documents' which are a tuple of (md, [intensities], count)
+    spectrums_processed:
+        List of normally processed spectra for Spec2Vec
+    set_white_listed_mds:
+        Set of MDs to always use without additional filtering like
+        require_in_count
+    set_chosen_mds:
+        Set of MDs to use
+    c_multiply:
+        Multiply intensities with sqrt of count
+    punish_intensities:
+        Divide MD intensities by 2
+    require_in_count:
+        Require X MDs to be present in spectrum for it to count, e.a. 2
+    """
+    md_spectrum_documents = []
+    for md_doc, spec in zip(md_documents, spectrums_processed):
+        new_doc = SpectrumDocument(spec.clone(), n_decimals=2)
+
+        processed_mds = []
+        for md in md_doc:
+            proc_md = False
+            if md[0] in set_white_listed_mds:
+                # if md present in both sets, this will happen first
+                proc_md = convert_md_tup(md,
+                                         count_multiplier=c_multiply,
+                                         punish=punish_intensities,
+                                         in_count_cutoff=1)
+            elif md[0] in set_chosen_mds:
+                proc_md = convert_md_tup(md,
+                                         count_multiplier=c_multiply,
+                                         punish=punish_intensities,
+                                         in_count_cutoff=require_in_count)
+
+            if proc_md:
+                processed_mds.append(proc_md)
+
+        if processed_mds:
+            md_words, md_intensities = zip(*processed_mds)
+            new_doc.words.extend(md_words)
+            new_doc.weights.extend(md_intensities)
+        assert len(new_doc.words) == len(new_doc.weights)
+
+    return md_spectrum_documents
