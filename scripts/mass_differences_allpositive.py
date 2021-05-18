@@ -137,13 +137,40 @@ if __name__ == "__main__":
     print("\nSelecting query spectra")
     selected_spectra = select_query_spectra(spectrums_top30)
 
-    # train new embedding for 'normal' Spec2Vec
-    documents_library_processed = [SpectrumDocument(s, n_decimals=2) for i, s
-                                   in enumerate(spectrums_processed) if
-                                   i not in selected_spectra]
-    documents_library_classical = [SpectrumDocument(s, n_decimals=2) for i, s
-                                   in enumerate(spectrums_classical) if
-                                   i not in selected_spectra]
+    # make SpectrumDocuments
+    documents_processed = [SpectrumDocument(s, n_decimals=2) for i, s
+                           in enumerate(spectrums_processed)]
+    documents_classical = [SpectrumDocument(s, n_decimals=2) for i, s
+                           in enumerate(spectrums_classical)]
+    # create md SpectrumDocuments
+    set_white_listed_mds = set(white_listed_mds)
+    set_chosen_mds = set(mds_to_use)
+    c_multiply = True  # multiply intensities with sqrt of count
+    md_spectrum_documents = create_md_spectrum_documents(
+        md_documents, spectrums_processed, set_white_listed_mds,
+        set_chosen_mds, c_multiply, cmd.punish_intensities,
+        cmd.require_in_count)
+
+    # divide in query and library
+    documents_library_processed_with_mds = []
+    documents_query_processed_with_mds = []
+    documents_library_processed = []
+    documents_query_processed = []
+    documents_library_classical = []
+    documents_query_classical = []
+    for i, (doc_proc, doc_clas, doc_md) in enumerate(
+            zip(documents_processed, documents_classical,md_spectrum_documents)
+    ):
+        if i in selected_spectra:
+            documents_query_processed.append(doc_proc)
+            documents_query_classical.append(doc_clas)
+            documents_query_processed_with_mds.append(doc_md)
+        else:
+            documents_library_processed.append(doc_proc)
+            documents_library_classical.append(doc_clas)
+            documents_library_processed_with_mds.append(doc_md)
+
+    # train new embedding for 'normal' Spec2Vec library
     if not cmd.s2v_embedding:
         model_file = os.path.join(cmd.output_dir,
                                   "spec2vec_librarymatching.model")
@@ -156,23 +183,7 @@ if __name__ == "__main__":
         model = gensim.models.Word2Vec.load(model_file)
     print("Normal Spec2Vecmodel:", model)
 
-    # train new embedding for Spec2Vec + MDs
-    # first create md spectrum documents
-    documents_library_processed_with_mds = []
-    documents_query_processed_with_mds = []
-    set_white_listed_mds = set(white_listed_mds)
-    set_chosen_mds = set(mds_to_use)
-    c_multiply = True  # multiply intensities with sqrt of count
-    md_spectrum_documents = create_md_spectrum_documents(
-        md_documents, spectrums_processed, set_white_listed_mds,
-        set_chosen_mds, c_multiply, cmd.punish_intensities,
-        cmd.require_in_count)
-    for i, new_md_doc in enumerate(md_spectrum_documents):
-        if i in selected_spectra:
-            documents_query_processed_with_mds.append(new_md_doc)
-        else:
-            documents_library_processed_with_mds.append(new_md_doc)
-
+    # train new embedding for Spec2Vec + MDs library
     if not cmd.existing_md_embedding:
         model_file_mds = os.path.join(
             cmd.output_dir, "spec2vec_librarymatching_added_MDs.model")
