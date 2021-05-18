@@ -12,6 +12,7 @@ import time
 import os
 import gensim
 from mass_differences.processing import processing_master
+from mass_differences.processing import get_ids_for_unique_inchikeys
 from mass_differences.create_mass_differences import get_mass_differences
 from mass_differences.create_mass_differences import get_md_documents
 from mass_differences.create_mass_differences import convert_md_tup

@@ -166,3 +166,65 @@ def processing_master(spectrums: List[SpectrumType],
             spectrums_processed.append(s_normal)
             spectrums_classical.append(s_classical)
     return spectrums_top30, spectrums_processed, spectrums_classical
+
+
+def count_higher_peaks(spectrum: SpectrumType, threshold: float = 0.1):
+    """Count peaks above relative intensity threshold for spectrum
+    """
+    return np.sum(spectrum.peaks.intensities/spectrum.peaks.intensities.max()
+                  >= threshold)
+
+
+def get_ids_for_unique_inchikeys(spectrums: List[SpectrumType]):
+    """Return indices for best chosen spectra for each unique inchikey
+
+    Parameters
+    ----------
+    spectrums:
+        Input spectra
+    """
+    # collect all inchikeys (first 14 characters)
+    inchikey_collection = {}
+    for i, spec in enumerate(spectrums):
+        inchikey = spec.get("inchikey")
+        if inchikey:
+            if inchikey[:14] in inchikey_collection:
+                inchikey_collection[inchikey[:14]] += [i]
+            else:
+                inchikey_collection[inchikey[:14]] = [i]
+
+    intensity_thres = 0.01
+    n_peaks_required = 10
+    ID_picks = []
+
+    inchikey14_unique = [x for x in inchikey_collection.keys()]
+
+    # Loop through all unique inchiques (14 first characters)
+    for inchikey14 in inchikey14_unique:
+        specIDs = np.array(inchikey_collection[inchikey14])
+        if specIDs.size == 1:
+            ID_picks.append(specIDs[0])
+        else:
+            # 1 select spec with sufficient peaks (e.g. 10 with intensity 0.01)
+            num_peaks = np.array([count_higher_peaks(
+                spectrums[specID], intensity_thres) for
+                                  specID in specIDs])
+            sufficient_peaks = np.where(num_peaks >= n_peaks_required)[0]
+            if sufficient_peaks.size == 0:
+                sufficient_peaks = np.where(num_peaks == max(num_peaks))[0]
+            step1IDs = specIDs[sufficient_peaks]
+
+            # 2 select best spectrum qualities
+            # (according to gnps measure). 1 > 2 > 3
+            qualities = np.array(
+                [int(spectrums[specID].get("library_class"))
+                 for specID in step1IDs])
+            step2IDs = step1IDs[np.where(qualities == min(qualities))[0]]
+
+            # 3 Select the ones with most peaks > threshold
+            num_peaks = np.array([count_higher_peaks(
+                spectrums[specID], intensity_thres) for specID in step2IDs])
+            pick = np.argmax(num_peaks)
+            ID_picks.append(step2IDs[pick])
+
+    return ID_picks
