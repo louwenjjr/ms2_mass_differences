@@ -185,5 +185,5 @@ def create_md_spectrum_documents(
             new_doc.words.extend(md_words)
             new_doc.weights.extend(md_intensities)
         assert len(new_doc.words) == len(new_doc.weights)
-
+        md_spectrum_documents.append(new_doc)
     return md_spectrum_documents

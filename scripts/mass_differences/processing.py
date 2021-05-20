@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 import numpy as np
 from typing import Union, List, Tuple
+from collections import OrderedDict
 from matchms.filtering import normalize_intensities
 from matchms.filtering import select_by_mz
 from matchms.filtering import require_minimum_number_of_peaks
@@ -184,7 +185,7 @@ def get_ids_for_unique_inchikeys(spectrums: List[SpectrumType]):
         Input spectra
     """
     # collect all inchikeys (first 14 characters)
-    inchikey_collection = {}
+    inchikey_collection = OrderedDict()
     for i, spec in enumerate(spectrums):
         inchikey = spec.get("inchikey")
         if inchikey:
@@ -217,8 +218,8 @@ def get_ids_for_unique_inchikeys(spectrums: List[SpectrumType]):
             # 2 select best spectrum qualities
             # (according to gnps measure). 1 > 2 > 3
             qualities = np.array(
-                [int(spectrums[specID].get("library_class"))
-                 for specID in step1IDs])
+                [int(spectrums[specID].get("library_class", 3))
+                 for specID in step1IDs])  # default worst quality
             step2IDs = step1IDs[np.where(qualities == min(qualities))[0]]
 
             # 3 Select the ones with most peaks > threshold
@@ -226,5 +227,6 @@ def get_ids_for_unique_inchikeys(spectrums: List[SpectrumType]):
                 spectrums[specID], intensity_thres) for specID in step2IDs])
             pick = np.argmax(num_peaks)
             ID_picks.append(step2IDs[pick])
+    ID_picks.sort()  # ensure order
 
     return ID_picks

@@ -27,6 +27,7 @@ from mass_differences.plots import true_false_pos_plot
 from mass_differences.plots import accuracy_vs_retrieval_plot
 from spec2vec import SpectrumDocument, Spec2Vec
 from spec2vec.model_building import train_new_word2vec_model
+from matchms.similarity import ModifiedCosine
 from copy import deepcopy
 
 
@@ -160,7 +161,8 @@ if __name__ == "__main__":
     documents_library_classical = []
     documents_query_classical = []
     for i, (doc_proc, doc_clas, doc_md) in enumerate(
-            zip(documents_processed, documents_classical,md_spectrum_documents)
+            zip(documents_processed, documents_classical,
+                md_spectrum_documents)
     ):
         if i in selected_spectra:
             documents_query_processed.append(doc_proc)
@@ -199,8 +201,12 @@ if __name__ == "__main__":
     print("MDs Spec2Vec model:", model_mds)
 
     # similarity calculations (1st UniqueInchikey figure in Spec2Vec paper)
+    print("\nCalculating similarity between all unique compound pairs")
     uniq_ids = get_ids_for_unique_inchikeys(spectrums_processed)
+    print(f"{len(uniq_ids)} unique inchikeys present in data" +
+          "(1st 14 characters)")
     uniq_documents_processed = [documents_processed[i] for i in uniq_ids]
+    uniq_spectrums_classical = [spectrums_classical[i] for i in uniq_ids]
     uniq_documents_mds = [md_spectrum_documents[i] for i in uniq_ids]
     # normal s2v similarities
     sims_out = os.path.join(
@@ -209,24 +215,99 @@ if __name__ == "__main__":
     if not os.path.exists(sims_out):
         spec2vec_similarity = Spec2Vec(model, intensity_weighting_power=0.5)
         similarity_matrix = spec2vec_similarity.matrix(
-            uniq_documents_processed, uniq_documents_processed, is_symmetric=True)
+            uniq_documents_processed, uniq_documents_processed,
+            is_symmetric=True)
         np.save(sims_out, similarity_matrix)
     else:
         similarity_matrix = np.load(sims_out)
+
+    # classical mod cosine similarities
+    mod_cos_sims_out = os.path.join(
+        cmd.output_dir,
+        "similarities_unique_inchikey_mod_cosine.npy")
+    if not os.path.exists(mod_cos_sims_out):
+        similarity_measure = ModifiedCosine(tolerance=0.005, mz_power=0,
+                                            intensity_power=1.0)
+        mod_cos_similarity = similarity_measure.matrix(
+            uniq_spectrums_classical, uniq_spectrums_classical,
+            is_symmetric=True)
+        np.save(mod_cos_sims_out, mod_cos_similarity)
+    else:
+        mod_cos_similarity = np.load(mod_cos_sims_out)
 
     # md s2v similarities
     md_sims_out = os.path.join(
         cmd.output_dir,
         'similarities_unique_inchikey_mds_spec2vec_librarymodel.npy')
     if not os.path.exists(md_sims_out):
-        md_spec2vec_similarity = Spec2Vec(model_mds, intensity_weighting_power=0.5)
+        md_spec2vec_similarity = Spec2Vec(model_mds,
+                                          intensity_weighting_power=0.5)
         md_similarity_matrix = md_spec2vec_similarity.matrix(
             uniq_documents_mds, uniq_documents_mds, is_symmetric=True)
         np.save(md_sims_out, md_similarity_matrix)
     else:
         md_similarity_matrix = np.load(md_sims_out)
 
+    # same similarities calculation but for models built on unique inchikey
+    unique_inchi_model_file = os.path.join(
+        cmd.output_dir, "spec2vec_unique_inchikey.model")
+    if not os.path.exists(unique_inchi_model_file):
+        print("\nTraining new 'normal' Spec2Vec model on all unique inchikey" +
+              " spectra at", unique_inchi_model_file)
+        unique_inchi_model = train_new_word2vec_model(
+            uniq_documents_processed, [50], unique_inchi_model_file)
+    else:
+        print("Loading existing 'normal' unique inchikey Spec2Vec model from",
+              model_file)
+        unique_inchi_model = gensim.models.Word2Vec.load(
+            unique_inchi_model_file)
+    print("Normal unique inchikey Spec2Vecmodel:", model)
+
+    # train new embedding for Spec2Vec + MDs library for unique inchikey
+    unique_inchi_model_mds_file = os.path.join(
+        cmd.output_dir, "spec2vec_unique_inchikey_added_mds.model")
+    if not os.path.exists(unique_inchi_model_mds_file):
+        print("\nTraining new Spec2Vec model with MDs on all unique inchikey" +
+              " spectra at", unique_inchi_model_mds_file)
+        unique_inchi_model_mds = train_new_word2vec_model(
+            uniq_documents_mds, [50], unique_inchi_model_mds_file)
+    else:
+        print(
+            "\nLoading existing unique inchikey Spec2Vec model with MDs from",
+            unique_inchi_model_mds_file)
+        unique_inchi_model_mds = gensim.models.Word2Vec.load(
+            unique_inchi_model_mds_file)
+    print("MDs unique inchikey Spec2Vec model:", unique_inchi_model_mds_file)
+
+    # normal s2v similarities unique inchikey model
+    sims_unique_model_out = os.path.join(
+        cmd.output_dir,
+        'similarities_unique_inchikey_spec2vec_unique_inchikey.npy')
+    if not os.path.exists(sims_unique_model_out):
+        spec2vec_ui_similarity = Spec2Vec(unique_inchi_model,
+                                          intensity_weighting_power=0.5)
+        similarity_ui_matrix = spec2vec_ui_similarity.matrix(
+            uniq_documents_processed, uniq_documents_processed,
+            is_symmetric=True)
+        np.save(sims_unique_model_out, similarity_ui_matrix)
+    else:
+        similarity_ui_matrix = np.load(sims_unique_model_out)
+
+    # md s2v similarities unique inchikey model
+    md_sims_unique_out = os.path.join(
+        cmd.output_dir,
+        'similarities_unique_inchikey_mds_spec2vec_unique_inchikey.npy')
+    if not os.path.exists(md_sims_unique_out):
+        md_spec2vec_ui_similarity = Spec2Vec(unique_inchi_model_mds,
+                                             intensity_weighting_power=0.5)
+        md_similarity_ui_matrix = md_spec2vec_ui_similarity.matrix(
+            uniq_documents_mds, uniq_documents_mds, is_symmetric=True)
+        np.save(md_sims_unique_out, md_similarity_ui_matrix)
+    else:
+        md_similarity_ui_matrix = np.load(md_sims_unique_out)
+
     # library matching
+    print("\nPerforming library matching with 1,000 randomly chosen queries")
     documents_query_processed = [
         SpectrumDocument(spectrums_processed[i], n_decimals=2) for i in
         selected_spectra]
