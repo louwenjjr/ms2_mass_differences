@@ -61,6 +61,11 @@ def get_commands() -> argparse.Namespace:
                         help="Use an existing Spec2Vec embedding that includes\
         mass differences as features instead of training a new\
         one, default: False", default=False)
+    parser.add_argument("-t", "--tanimoto_scores_inchikeys",
+                        metavar="<.pickle>", help="Pickled pd.DataFrame of\
+        tanimoto scores between all unique inchikeys in data, row and columns\
+        should be inchikeys. Default: False - no unique inchikey figure will\
+        be made", default=False)
     parser.add_argument("-l", "--lower_intensity_cutoff",
                         help="Minimum intensity for peaks to be included in\
                         mass difference selection, default: 0.05", type=float,
@@ -208,6 +213,8 @@ if __name__ == "__main__":
     uniq_documents_processed = [documents_processed[i] for i in uniq_ids]
     uniq_spectrums_classical = [spectrums_classical[i] for i in uniq_ids]
     uniq_documents_mds = [md_spectrum_documents[i] for i in uniq_ids]
+    unique_inchikeys_14 = [
+        s.get("inchikey", "")[:14] for s in uniq_spectrums_classical]
     # normal s2v similarities
     sims_out = os.path.join(
         cmd.output_dir,
@@ -305,6 +312,17 @@ if __name__ == "__main__":
         np.save(md_sims_unique_out, md_similarity_ui_matrix)
     else:
         md_similarity_ui_matrix = np.load(md_sims_unique_out)
+
+    # plot unique inchikey figure
+    if cmd.tanimoto_scores_inchikeys:
+        # get matrix of tanimoto scores based data order
+        tan_df = pickle.load(open(cmd.tanimoto_scores_inchikeys, 'rb'))
+        cols_dict = {in14: i for i, in14 in enumerate(tan_df.columns)}
+        chosen_inds = [cols_dict[in14] for in14 in unique_inchikeys_14]
+        slice1 = np.take(tan_df.values, chosen_inds, 0)
+        tan_matrix = np.take(slice1, chosen_inds, 1)
+
+
 
     # library matching
     print("\nPerforming library matching with 1,000 randomly chosen queries")
