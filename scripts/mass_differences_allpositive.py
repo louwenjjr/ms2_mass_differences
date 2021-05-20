@@ -12,6 +12,7 @@ import time
 import os
 import gensim
 import numpy as np
+import matplotlib.pyplot as plt
 from mass_differences.processing import processing_master
 from mass_differences.processing import get_ids_for_unique_inchikeys
 from mass_differences.create_mass_differences import get_mass_differences
@@ -25,10 +26,10 @@ from mass_differences.validation_pipeline import md_distribution_metrics
 from mass_differences.library_search import library_matching
 from mass_differences.plots import true_false_pos_plot
 from mass_differences.plots import accuracy_vs_retrieval_plot
+from mass_differences.plotting_functions import plot_precentile
 from spec2vec import SpectrumDocument, Spec2Vec
 from spec2vec.model_building import train_new_word2vec_model
 from matchms.similarity import ModifiedCosine
-from copy import deepcopy
 
 
 def get_commands() -> argparse.Namespace:
@@ -321,6 +322,94 @@ if __name__ == "__main__":
         chosen_inds = [cols_dict[in14] for in14 in unique_inchikeys_14]
         slice1 = np.take(tan_df.values, chosen_inds, 0)
         tan_matrix = np.take(slice1, chosen_inds, 1)
+
+        # make mod cosine min match 10
+        mod_arr_min10_file = os.path.join(
+            cmd.output_dir,
+            "similarities_unique_inchikey_mod_cosine_min10.npy")
+        if not os.path.exists(mod_arr_min10_file):
+            mod_cos_similarity_min10 = []
+            mod_cos_similarity_matches = []
+            for row in mod_cos_similarity:
+                vals, matches = zip(*row)
+                mod_cos_similarity_min10.append(list(vals))
+                mod_cos_similarity_matches.append(list(matches))
+            mod_cos_similarity_min10_arr = np.array(mod_cos_similarity_min10)
+            matches_arr = np.array(mod_cos_similarity_matches)
+            mod_cos_similarity_min10_arr[matches_arr < 10] = 0
+            np.save(mod_arr_min10_file, mod_cos_similarity_min10_arr)
+        else:
+            mod_cos_similarity_min10_arr = np.load(mod_arr_min10_file)
+
+        # plot
+        percentile_spec2vec_ui = plot_precentile(
+            tan_matrix,
+            similarity_ui_matrix,
+            num_bins=100, show_top_percentile=0.1,
+            ignore_diagonal=True)
+        percentile_spec2vec_md_ui = plot_precentile(
+            tan_matrix,
+            md_similarity_ui_matrix,
+            num_bins=100, show_top_percentile=0.1,
+            ignore_diagonal=True)
+        percentile_mod_cosine_tol0005 = plot_precentile(
+            tan_matrix,
+            mod_cos_similarity_min10_arr,
+            num_bins=100, show_top_percentile=0.1,
+            ignore_diagonal=True)
+        percentile_tanimoto = plot_precentile(
+            tan_matrix,
+            tan_matrix,
+            num_bins=100, show_top_percentile=0.1,
+            ignore_diagonal=True)
+
+        # Compare all:
+        num_bins = 100
+        show_top_percentile = 0.1
+
+        plt.style.use('seaborn-white')  # ('ggplot')
+        fig, ax = plt.subplots(figsize=(7, 6))
+
+        x_percentiles = (show_top_percentile /
+                         num_bins * (1 + np.arange(num_bins)))[::-1]
+
+        plt.plot(x_percentiles, percentile_tanimoto,
+                 color='gray',
+                 label='1) Tanimoto score (best theoretically possible)')
+
+        plt.plot(x_percentiles, percentile_spec2vec_ui,
+                 color='black',
+                 label=
+                 '2) Spec2Vec - trained on UniqueInchikey (50 iterations)')
+
+        plt.plot(x_percentiles, percentile_spec2vec_md_ui,
+                 ":", color='blue',
+                 label='3) Spec2Vec with MDs - trained on UniqueInchikey' +
+                       ' (50 iterations)')
+
+        plt.plot(x_percentiles, percentile_mod_cosine_tol0005,
+                 color='crimson',
+                 label='4) Modified cosine score (tol = 0.005, min_match = 10)')
+
+        plt.xticks(fontsize=12)
+        plt.yticks(fontsize=12)
+        # plt.xticks(np.arange(0, 0.11, step=0.02), ('0.00%', '0.02%', '0.04%', '0.06%', '0.08%', '0.10%'))
+        plt.xticks(np.linspace(0, show_top_percentile, 5),
+                   ["{:.3f}%".format(x) for x in
+                    np.linspace(0, show_top_percentile, 5)])
+        plt.legend()
+        plt.xlabel("Top percentile of spectral similarity score g(s1,s2)",
+                   fontsize=13)
+        plt.ylabel(
+            "Mean molecular similarity f(m1,m2) \n (within respective percentile)",
+            fontsize=13)
+        plt.grid(True)
+        plt.xlim(0, 0.1)
+        plt.ylim(0, 1.02)  # (0.38, 0.92)
+        plt.savefig(os.path.join(
+            cmd.output_dir,
+            'Benchmarking_top_percentil_comparison.pdf'))
+
 
 
 
