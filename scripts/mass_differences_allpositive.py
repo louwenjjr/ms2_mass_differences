@@ -319,7 +319,13 @@ if __name__ == "__main__":
         # get matrix of tanimoto scores based data order
         tan_df = pickle.load(open(cmd.tanimoto_scores_inchikeys, 'rb'))
         cols_dict = {in14: i for i, in14 in enumerate(tan_df.columns)}
-        chosen_inds = [cols_dict[in14] for in14 in unique_inchikeys_14]
+        # get only the inchikeys for which there are tanimoto scores (slices)
+        ui_14_tan_inds, unique_inchikeys_14_tan = zip(
+            *[(i, in14) for i, in14 in enumerate(unique_inchikeys_14) if in14
+              in cols_dict])
+        chosen_inds = [cols_dict[in14] for in14 in unique_inchikeys_14_tan if
+                       in14 in cols_dict]
+        # slice tan matrix to only include existing inchikeys
         slice1 = np.take(tan_df.values, chosen_inds, 0)
         tan_matrix = np.take(slice1, chosen_inds, 1)
 
@@ -341,20 +347,32 @@ if __name__ == "__main__":
         else:
             mod_cos_similarity_min10_arr = np.load(mod_arr_min10_file)
 
+        # slice s2v/mod cosine matrices to only include existing tan inchikeys
+        mod_slice = np.take(mod_cos_similarity_min10_arr, ui_14_tan_inds, 0)
+        mod_cos_similarity_min10_final = np.take(mod_slice, ui_14_tan_inds, 1)
+        similarity_ui_matrix_slice = np.take(similarity_ui_matrix,
+                                             ui_14_tan_inds, 0)
+        similarity_ui_matrix_final = np.take(similarity_ui_matrix_slice,
+                                             ui_14_tan_inds, 1)
+        md_similarity_ui_matrix_slice = np.take(md_similarity_ui_matrix,
+                                                ui_14_tan_inds, 0)
+        md_similarity_ui_matrix_final = np.take(md_similarity_ui_matrix_slice,
+                                                ui_14_tan_inds, 1)
+
         # plot
         percentile_spec2vec_ui = plot_precentile(
             tan_matrix,
-            similarity_ui_matrix,
+            similarity_ui_matrix_final,
             num_bins=100, show_top_percentile=0.1,
             ignore_diagonal=True)
         percentile_spec2vec_md_ui = plot_precentile(
             tan_matrix,
-            md_similarity_ui_matrix,
+            md_similarity_ui_matrix_final,
             num_bins=100, show_top_percentile=0.1,
             ignore_diagonal=True)
         percentile_mod_cosine_tol0005 = plot_precentile(
             tan_matrix,
-            mod_cos_similarity_min10_arr,
+            mod_cos_similarity_min10_final,
             num_bins=100, show_top_percentile=0.1,
             ignore_diagonal=True)
         percentile_tanimoto = plot_precentile(
@@ -409,9 +427,6 @@ if __name__ == "__main__":
         plt.savefig(os.path.join(
             cmd.output_dir,
             'Benchmarking_top_percentil_comparison.pdf'))
-
-
-
 
     # library matching
     print("\nPerforming library matching with 1,000 randomly chosen queries")
