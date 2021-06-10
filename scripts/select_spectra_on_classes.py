@@ -56,11 +56,14 @@ if __name__ == "__main__":
             select_inchikeys.append(inchikey)
 
     selected_spectrums = []
+    seen_inchikeys = set()
     for spec in input_spectrums:
         spec_inchikey = spec.metadata.get("inchikey")
         if spec_inchikey in select_inchikeys:
             selected_spectrums.append(spec)
-    print(f"Selected {len(selected_spectrums)} spectra")
+            seen_inchikeys.add(spec_inchikey)
+    print(f"Selected {len(selected_spectrums)} spectra with"
+          f" {len(seen_inchikeys)} inchikeys")
 
     out_file = cmd.output_file
     if not out_file.endswith(".pickle"):

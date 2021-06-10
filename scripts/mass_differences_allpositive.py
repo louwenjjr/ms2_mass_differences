@@ -86,6 +86,9 @@ def get_commands() -> argparse.Namespace:
     parser.add_argument("--multiply_intensities", help="Turn on\
         this flag to multiply intensities of two parent peaks to get the mass\
         difference intensity", default=False, action="store_true")
+    parser.add_argument("--no_count_benefit", help="Toggle to not multiply\
+        intensity of a mass difference by the sqrt(in-spectrum count)",
+                        default=True, action="store_false")
     parser.add_argument("--library_matching", action="store_true",
                         help="Toggle to do library matching based on 1,000\
         taken out query spectra", default=False)
@@ -153,7 +156,7 @@ if __name__ == "__main__":
     # create md SpectrumDocuments
     set_white_listed_mds = set(white_listed_mds)
     set_chosen_mds = set(mds_to_use)
-    c_multiply = True  # multiply intensities with sqrt of count
+    c_multiply = cmd.no_count_benefit  # multiply intensities with sqrt(count)
     md_spectrum_documents = create_md_spectrum_documents(
         md_documents, spectrums_processed, set_white_listed_mds,
         set_chosen_mds, c_multiply, cmd.punish_intensities,
