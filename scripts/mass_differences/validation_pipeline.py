@@ -54,7 +54,7 @@ def select_query_spectra(spectrums: List[SpectrumType],
 
 def md_distribution_metrics(
         documents_processed_with_mds: List[SpectrumDocument],
-        output_dir: str):
+        output_dir: str) -> List[str]:
     """Extract metrics on MDs from SpectrumDocuments and make plots
 
     Parameters
@@ -69,11 +69,14 @@ def md_distribution_metrics(
     md_words = []
     non_md_avg_intensity = []
     md_avg_intensity = []
+    md_words_set = set()
 
     for doc in documents_processed_with_mds:
         words = doc.words
         total_w = len(words)
-        md_len = len([1 for w in words if w.startswith('md')])
+        doc_md_words = [w for w in words if w.startswith('md')]
+        md_words_set.update(doc_md_words)
+        md_len = len(doc_md_words)
         non_md_len = total_w - md_len
         md_ints = []
         non_md_ints = []
@@ -93,6 +96,7 @@ def md_distribution_metrics(
     mds_per_spec_plot(non_md_words, md_words, output_dir)
     md_words_frac_plot(md_words, total_words, output_dir)
     md_intensity_dist(non_md_avg_intensity, md_avg_intensity, output_dir)
+    return list(md_words_set)
 
 
 def library_matching_metrics(

@@ -216,18 +216,18 @@ if __name__ == "__main__":
     uniq_documents_mds = [md_spectrum_documents[i] for i in uniq_ids]
     unique_inchikeys_14 = [
         s.get("inchikey", "")[:14] for s in uniq_spectrums_classical]
-    # normal s2v similarities
-    sims_out = os.path.join(
-        cmd.output_dir,
-        'similarities_unique_inchikey_spec2vec_librarymodel.npy')
-    if not os.path.exists(sims_out):
-        spec2vec_similarity = Spec2Vec(model, intensity_weighting_power=0.5)
-        similarity_matrix = spec2vec_similarity.matrix(
-            uniq_documents_processed, uniq_documents_processed,
-            is_symmetric=True)
-        np.save(sims_out, similarity_matrix)
-    else:
-        similarity_matrix = np.load(sims_out)
+    # # normal s2v similarities
+    # sims_out = os.path.join(
+    #     cmd.output_dir,
+    #     'similarities_unique_inchikey_spec2vec_librarymodel.npy')
+    # if not os.path.exists(sims_out):
+    #     spec2vec_similarity = Spec2Vec(model, intensity_weighting_power=0.5)
+    #     similarity_matrix = spec2vec_similarity.matrix(
+    #         uniq_documents_processed, uniq_documents_processed,
+    #         is_symmetric=True)
+    #     np.save(sims_out, similarity_matrix)
+    # else:
+    #     similarity_matrix = np.load(sims_out)
 
     # classical mod cosine similarities
     mod_cos_sims_out = os.path.join(
@@ -243,18 +243,18 @@ if __name__ == "__main__":
     else:
         mod_cos_similarity = np.load(mod_cos_sims_out)
 
-    # md s2v similarities
-    md_sims_out = os.path.join(
-        cmd.output_dir,
-        'similarities_unique_inchikey_mds_spec2vec_librarymodel.npy')
-    if not os.path.exists(md_sims_out):
-        md_spec2vec_similarity = Spec2Vec(model_mds,
-                                          intensity_weighting_power=0.5)
-        md_similarity_matrix = md_spec2vec_similarity.matrix(
-            uniq_documents_mds, uniq_documents_mds, is_symmetric=True)
-        np.save(md_sims_out, md_similarity_matrix)
-    else:
-        md_similarity_matrix = np.load(md_sims_out)
+    # # md s2v similarities
+    # md_sims_out = os.path.join(
+    #     cmd.output_dir,
+    #     'similarities_unique_inchikey_mds_spec2vec_librarymodel.npy')
+    # if not os.path.exists(md_sims_out):
+    #     md_spec2vec_similarity = Spec2Vec(model_mds,
+    #                                       intensity_weighting_power=0.5)
+    #     md_similarity_matrix = md_spec2vec_similarity.matrix(
+    #         uniq_documents_mds, uniq_documents_mds, is_symmetric=True)
+    #     np.save(md_sims_out, md_similarity_matrix)
+    # else:
+    #     md_similarity_matrix = np.load(md_sims_out)
 
     # same similarities calculation but for models built on unique inchikey
     unique_inchi_model_file = os.path.join(
@@ -427,6 +427,7 @@ if __name__ == "__main__":
         plt.savefig(os.path.join(
             cmd.output_dir,
             'Benchmarking_top_percentil_comparison.pdf'))
+        plt.close(fig)
 
     # library matching
     print("\nPerforming library matching with 1,000 randomly chosen queries")
@@ -481,9 +482,14 @@ if __name__ == "__main__":
         mass_tolerance=1.0,
         mass_tolerance_type="ppm")
 
-    print("\nMaking metrics plots")
-    md_distribution_metrics(
-        documents_library_processed_with_mds, cmd.output_dir)
+    print("\nCalculating metrics + metrics plots")
+    all_used_mds = md_distribution_metrics(
+        md_spectrum_documents, cmd.output_dir)
+    used_mds_out = os.path.join(cmd.output_dir, 'used_mds.txt')
+    with open(used_mds_out, 'w') as outf:
+        for used_md in all_used_mds:
+            outf.write(f"{used_md}\n")
+    print(f"{len(all_used_mds)} MDs are used in data, saved at {used_mds_out}")
 
     all_lib_matching_metrics = library_matching_metrics(
         documents_query_classical, documents_library_classical,

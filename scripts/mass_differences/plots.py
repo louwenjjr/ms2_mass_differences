@@ -224,3 +224,4 @@ def accuracy_vs_retrieval_plot(
     plt.savefig(os.path.join(
         output_dir,
         f'library_matching_accuracy_vs_retrieval_minmatch{min_match}.svg'))
+    plt.close()
