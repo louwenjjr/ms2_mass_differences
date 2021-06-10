@@ -246,7 +246,8 @@ if __name__ == "__main__":
         'similarities_unique_inchikey_spec2vec_unique_inchikey.npy')
     if not os.path.exists(sims_unique_model_out):
         spec2vec_ui_similarity = Spec2Vec(unique_inchi_model,
-                                          intensity_weighting_power=0.5)
+                                          intensity_weighting_power=0.5,
+                                          allowed_missing_percentage=20)
         similarity_ui_matrix = spec2vec_ui_similarity.matrix(
             uniq_documents_processed, uniq_documents_processed,
             is_symmetric=True)
@@ -260,7 +261,8 @@ if __name__ == "__main__":
         'similarities_unique_inchikey_mds_spec2vec_unique_inchikey.npy')
     if not os.path.exists(md_sims_unique_out):
         md_spec2vec_ui_similarity = Spec2Vec(unique_inchi_model_mds,
-                                             intensity_weighting_power=0.5)
+                                             intensity_weighting_power=0.5,
+                                             allowed_missing_percentage=20)
         md_similarity_ui_matrix = md_spec2vec_ui_similarity.matrix(
             uniq_documents_mds, uniq_documents_mds, is_symmetric=True)
         np.save(md_sims_unique_out, md_similarity_ui_matrix)
