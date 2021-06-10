@@ -159,6 +159,16 @@ if __name__ == "__main__":
         set_chosen_mds, c_multiply, cmd.punish_intensities,
         cmd.require_in_count)
 
+    print("\nCalculating metrics + metrics plots")
+    all_used_mds = md_distribution_metrics(
+        md_spectrum_documents, cmd.output_dir)
+    used_mds_out = os.path.join(cmd.output_dir, 'used_mds.txt')
+    with open(used_mds_out, 'w') as outf:
+        for used_md in all_used_mds:
+            outf.write(f"{used_md}\n")
+    print(f"{len(all_used_mds)} MDs are used in data, saved at" +
+          f" {used_mds_out}")
+
     # similarity calculations (1st UniqueInchikey figure in Spec2Vec paper)
     print("\nCalculating similarity between all unique compound pairs")
     uniq_ids = get_ids_for_unique_inchikeys(spectrums_processed)
@@ -238,7 +248,7 @@ if __name__ == "__main__":
             unique_inchi_model_mds_file)
         unique_inchi_model_mds = gensim.models.Word2Vec.load(
             unique_inchi_model_mds_file)
-    print("MDs unique inchikey Spec2Vec model:", unique_inchi_model_mds_file)
+    print("MDs unique inchikey Spec2Vec model:", unique_inchi_model_mds)
 
     # normal s2v similarities unique inchikey model
     sims_unique_model_out = os.path.join(
@@ -489,16 +499,6 @@ if __name__ == "__main__":
             cosine_tol=0.005,
             mass_tolerance=1.0,
             mass_tolerance_type="ppm")
-
-        print("\nCalculating metrics + metrics plots")
-        all_used_mds = md_distribution_metrics(
-            md_spectrum_documents, cmd.output_dir)
-        used_mds_out = os.path.join(cmd.output_dir, 'used_mds.txt')
-        with open(used_mds_out, 'w') as outf:
-            for used_md in all_used_mds:
-                outf.write(f"{used_md}\n")
-        print(f"{len(all_used_mds)} MDs are used in data, saved at" +
-              f" {used_mds_out}")
 
         all_lib_matching_metrics = library_matching_metrics(
             documents_query_classical, documents_library_classical,
