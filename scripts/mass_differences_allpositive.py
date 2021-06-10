@@ -86,6 +86,9 @@ def get_commands() -> argparse.Namespace:
     parser.add_argument("--multiply_intensities", help="Turn on\
         this flag to multiply intensities of two parent peaks to get the mass\
         difference intensity", default=False, action="store_true")
+    parser.add_argument("--library_matching", action="store_true",
+                        help="Toggle to do library matching based on 1,000\
+        taken out query spectra", default=False)
     return parser.parse_args()
 
 
@@ -141,9 +144,6 @@ if __name__ == "__main__":
 
     # validation pipeline
     spectrums_top30, spectrums_processed, spectrums_classical = processing_res
-    # select query spectra
-    print("\nSelecting query spectra")
-    selected_spectra = select_query_spectra(spectrums_top30)
 
     # make SpectrumDocuments
     documents_processed = [SpectrumDocument(s, n_decimals=2) for i, s
@@ -158,53 +158,6 @@ if __name__ == "__main__":
         md_documents, spectrums_processed, set_white_listed_mds,
         set_chosen_mds, c_multiply, cmd.punish_intensities,
         cmd.require_in_count)
-
-    # divide in query and library
-    documents_library_processed_with_mds = []
-    documents_query_processed_with_mds = []
-    documents_library_processed = []
-    documents_query_processed = []
-    documents_library_classical = []
-    documents_query_classical = []
-    for i, (doc_proc, doc_clas, doc_md) in enumerate(
-            zip(documents_processed, documents_classical,
-                md_spectrum_documents)
-    ):
-        if i in selected_spectra:
-            documents_query_processed.append(doc_proc)
-            documents_query_classical.append(doc_clas)
-            documents_query_processed_with_mds.append(doc_md)
-        else:
-            documents_library_processed.append(doc_proc)
-            documents_library_classical.append(doc_clas)
-            documents_library_processed_with_mds.append(doc_md)
-
-    # train new embedding for 'normal' Spec2Vec library
-    if not cmd.s2v_embedding:
-        model_file = os.path.join(cmd.output_dir,
-                                  "spec2vec_librarymatching.model")
-        print("\nTraining new 'normal' Spec2Vec model at", model_file)
-        model = train_new_word2vec_model(documents_library_processed,
-                                         [15], model_file)  # 15 iterations
-    else:
-        model_file = cmd.s2v_embedding
-        print("Loading existing 'normal' Spec2Vec model from", model_file)
-        model = gensim.models.Word2Vec.load(model_file)
-    print("Normal Spec2Vecmodel:", model)
-
-    # train new embedding for Spec2Vec + MDs library
-    if not cmd.existing_md_embedding:
-        model_file_mds = os.path.join(
-            cmd.output_dir, "spec2vec_librarymatching_added_MDs.model")
-        print("\nTraining new 'Spec2Vec model with MDs at", model_file_mds)
-        model_mds = train_new_word2vec_model(
-            documents_library_processed_with_mds, [15], model_file_mds)
-    else:
-        model_file_mds = cmd.existing_md_embedding
-        print("\nLoading existing Spec2Vec model with MDs from",
-              model_file_mds)
-        model_mds = gensim.models.Word2Vec.load(model_file_mds)
-    print("MDs Spec2Vec model:", model_mds)
 
     # similarity calculations (1st UniqueInchikey figure in Spec2Vec paper)
     print("\nCalculating similarity between all unique compound pairs")
@@ -266,10 +219,10 @@ if __name__ == "__main__":
             uniq_documents_processed, [50], unique_inchi_model_file)
     else:
         print("Loading existing 'normal' unique inchikey Spec2Vec model from",
-              model_file)
+              unique_inchi_model_file)
         unique_inchi_model = gensim.models.Word2Vec.load(
             unique_inchi_model_file)
-    print("Normal unique inchikey Spec2Vecmodel:", model)
+    print("Normal unique inchikey Spec2Vecmodel:", unique_inchi_model)
 
     # train new embedding for Spec2Vec + MDs library for unique inchikey
     unique_inchi_model_mds_file = os.path.join(
@@ -430,90 +383,144 @@ if __name__ == "__main__":
         plt.close(fig)
 
     # library matching
-    print("\nPerforming library matching with 1,000 randomly chosen queries")
-    documents_query_processed = [
-        SpectrumDocument(spectrums_processed[i], n_decimals=2) for i in
-        selected_spectra]
-    documents_query_classical = [
-        SpectrumDocument(spectrums_classical[i], n_decimals=2) for i in
-        selected_spectra]
+    if cmd.library_matching:
+        # select query spectra
+        print("\nSelecting query spectra")
+        selected_spectra = select_query_spectra(spectrums_top30)
 
-    found_matches_processed = library_matching(
-        documents_query_processed,
-        documents_library_processed,
-        model,
-        presearch_based_on=[
-            "precursor_mz",
-            "spec2vec-top20"],
-        include_scores=["cosine",
-                        "modcosine"],
-        ignore_non_annotated=True,
-        intensity_weighting_power=0.5,
-        allowed_missing_percentage=50.0,
-        cosine_tol=0.005,
-        mass_tolerance=1.0,
-        mass_tolerance_type="ppm")
-    found_matches_classical = library_matching(
-        documents_query_classical,
-        documents_library_classical,
-        model,
-        presearch_based_on=[
-            "precursor_mz"],
-        include_scores=["cosine",
-                        "modcosine"],
-        ignore_non_annotated=True,
-        intensity_weighting_power=0.5,
-        allowed_missing_percentage=50.0,
-        cosine_tol=0.005,
-        mass_tolerance=1.0,
-        mass_tolerance_type="ppm")
+        # divide in query and library
+        documents_library_processed_with_mds = []
+        documents_query_processed_with_mds = []
+        documents_library_processed = []
+        documents_query_processed = []
+        documents_library_classical = []
+        documents_query_classical = []
+        for i, (doc_proc, doc_clas, doc_md) in enumerate(
+                zip(documents_processed, documents_classical,
+                    md_spectrum_documents)
+        ):
+            if i in selected_spectra:
+                documents_query_processed.append(doc_proc)
+                documents_query_classical.append(doc_clas)
+                documents_query_processed_with_mds.append(doc_md)
+            else:
+                documents_library_processed.append(doc_proc)
+                documents_library_classical.append(doc_clas)
+                documents_library_processed_with_mds.append(doc_md)
 
-    # library matching for MDs
-    found_matches_processed_with_mds = library_matching(
-        documents_query_processed_with_mds,
-        documents_library_processed_with_mds,
-        model_mds,
-        presearch_based_on=["precursor_mz", "spec2vec-top20"],
-        include_scores=["cosine", "modcosine"],
-        ignore_non_annotated=True,
-        intensity_weighting_power=0.5,
-        allowed_missing_percentage=50.0,
-        cosine_tol=0.005,
-        mass_tolerance=1.0,
-        mass_tolerance_type="ppm")
+        # train new embedding for 'normal' Spec2Vec library
+        if not cmd.s2v_embedding:
+            model_file = os.path.join(cmd.output_dir,
+                                      "spec2vec_librarymatching.model")
+            print("\nTraining new 'normal' Spec2Vec model at", model_file)
+            model = train_new_word2vec_model(documents_library_processed,
+                                             [15], model_file)  # 15 iterations
+        else:
+            model_file = cmd.s2v_embedding
+            print("Loading existing 'normal' Spec2Vec model from", model_file)
+            model = gensim.models.Word2Vec.load(model_file)
+        print("Normal Spec2Vecmodel:", model)
 
-    print("\nCalculating metrics + metrics plots")
-    all_used_mds = md_distribution_metrics(
-        md_spectrum_documents, cmd.output_dir)
-    used_mds_out = os.path.join(cmd.output_dir, 'used_mds.txt')
-    with open(used_mds_out, 'w') as outf:
-        for used_md in all_used_mds:
-            outf.write(f"{used_md}\n")
-    print(f"{len(all_used_mds)} MDs are used in data, saved at {used_mds_out}")
+        # train new embedding for Spec2Vec + MDs library
+        if not cmd.existing_md_embedding:
+            model_file_mds = os.path.join(
+                cmd.output_dir, "spec2vec_librarymatching_added_MDs.model")
+            print("\nTraining new 'Spec2Vec model with MDs at", model_file_mds)
+            model_mds = train_new_word2vec_model(
+                documents_library_processed_with_mds, [15], model_file_mds)
+        else:
+            model_file_mds = cmd.existing_md_embedding
+            print("\nLoading existing Spec2Vec model with MDs from",
+                  model_file_mds)
+            model_mds = gensim.models.Word2Vec.load(model_file_mds)
+        print("MDs Spec2Vec model:", model_mds)
 
-    all_lib_matching_metrics = library_matching_metrics(
-        documents_query_classical, documents_library_classical,
-        found_matches_classical, documents_query_processed,
-        documents_library_processed, found_matches_processed,
-        documents_query_processed_with_mds,
-        documents_library_processed_with_mds,
-        found_matches_processed_with_mds)
-    # save metrics to be used in other plots
-    lib_metrics_file = os.path.join(cmd.output_dir,
-                                    'lib_matching_metrics.pickle')
-    with open(lib_metrics_file, 'wb') as outf:
-        pickle.dump(all_lib_matching_metrics, outf)
+        print(
+            "\nPerforming library matching with 1,000 randomly chosen queries")
+        documents_query_processed = [
+            SpectrumDocument(spectrums_processed[i], n_decimals=2) for i in
+            selected_spectra]
+        documents_query_classical = [
+            SpectrumDocument(spectrums_classical[i], n_decimals=2) for i in
+            selected_spectra]
 
-    test_matches_min2, test_matches_min6, test_matches_s2v, \
-    test_matches_s2v_mds = all_lib_matching_metrics
+        found_matches_processed = library_matching(
+            documents_query_processed,
+            documents_library_processed,
+            model,
+            presearch_based_on=[
+                "precursor_mz",
+                "spec2vec-top20"],
+            include_scores=["cosine",
+                            "modcosine"],
+            ignore_non_annotated=True,
+            intensity_weighting_power=0.5,
+            allowed_missing_percentage=50.0,
+            cosine_tol=0.005,
+            mass_tolerance=1.0,
+            mass_tolerance_type="ppm")
+        found_matches_classical = library_matching(
+            documents_query_classical,
+            documents_library_classical,
+            model,
+            presearch_based_on=[
+                "precursor_mz"],
+            include_scores=["cosine",
+                            "modcosine"],
+            ignore_non_annotated=True,
+            intensity_weighting_power=0.5,
+            allowed_missing_percentage=50.0,
+            cosine_tol=0.005,
+            mass_tolerance=1.0,
+            mass_tolerance_type="ppm")
 
-    # make plots
-    true_false_pos_plot(test_matches_min6, test_matches_s2v,
-                        test_matches_s2v_mds, cmd.output_dir, min_match=6)
+        # library matching for MDs
+        found_matches_processed_with_mds = library_matching(
+            documents_query_processed_with_mds,
+            documents_library_processed_with_mds,
+            model_mds,
+            presearch_based_on=["precursor_mz", "spec2vec-top20"],
+            include_scores=["cosine", "modcosine"],
+            ignore_non_annotated=True,
+            intensity_weighting_power=0.5,
+            allowed_missing_percentage=50.0,
+            cosine_tol=0.005,
+            mass_tolerance=1.0,
+            mass_tolerance_type="ppm")
 
-    accuracy_vs_retrieval_plot(
-        test_matches_min2, test_matches_s2v, test_matches_s2v_mds,
-        cmd.output_dir, min_match=2)
+        print("\nCalculating metrics + metrics plots")
+        all_used_mds = md_distribution_metrics(
+            md_spectrum_documents, cmd.output_dir)
+        used_mds_out = os.path.join(cmd.output_dir, 'used_mds.txt')
+        with open(used_mds_out, 'w') as outf:
+            for used_md in all_used_mds:
+                outf.write(f"{used_md}\n")
+        print(f"{len(all_used_mds)} MDs are used in data, saved at" +
+              f" {used_mds_out}")
+
+        all_lib_matching_metrics = library_matching_metrics(
+            documents_query_classical, documents_library_classical,
+            found_matches_classical, documents_query_processed,
+            documents_library_processed, found_matches_processed,
+            documents_query_processed_with_mds,
+            documents_library_processed_with_mds,
+            found_matches_processed_with_mds)
+        # save metrics to be used in other plots
+        lib_metrics_file = os.path.join(cmd.output_dir,
+                                        'lib_matching_metrics.pickle')
+        with open(lib_metrics_file, 'wb') as outf:
+            pickle.dump(all_lib_matching_metrics, outf)
+
+        test_matches_min2, test_matches_min6, test_matches_s2v, \
+        test_matches_s2v_mds = all_lib_matching_metrics
+
+        # make plots
+        true_false_pos_plot(test_matches_min6, test_matches_s2v,
+                            test_matches_s2v_mds, cmd.output_dir, min_match=6)
+
+        accuracy_vs_retrieval_plot(
+            test_matches_min2, test_matches_s2v, test_matches_s2v_mds,
+            cmd.output_dir, min_match=2)
 
     end = time.time()
     print(f"\nFinished in {end - start:.3f} s")
