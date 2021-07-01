@@ -161,6 +161,11 @@ if __name__ == "__main__":
         md_documents, spectrums_processed, set_white_listed_mds,
         set_chosen_mds, c_multiply, cmd.punish_intensities,
         cmd.require_in_count)
+    spec_docs_mds_file = os.path.join(cmd.output_dir,
+                                      'spectrum_documents_MDs.pickle')
+    print("Saving spectrum documents with MDs at:", spec_docs_mds_file)
+    with open(spec_docs_mds_file, 'wb') as outf:
+        pickle.dump(md_spectrum_documents, outf)
 
     print("\nCalculating metrics + metrics plots")
     all_used_mds = md_distribution_metrics(
@@ -260,7 +265,7 @@ if __name__ == "__main__":
     if not os.path.exists(sims_unique_model_out):
         spec2vec_ui_similarity = Spec2Vec(unique_inchi_model,
                                           intensity_weighting_power=0.5,
-                                          allowed_missing_percentage=20)
+                                          allowed_missing_percentage=60)
         similarity_ui_matrix = spec2vec_ui_similarity.matrix(
             uniq_documents_processed, uniq_documents_processed,
             is_symmetric=True)
@@ -275,7 +280,7 @@ if __name__ == "__main__":
     if not os.path.exists(md_sims_unique_out):
         md_spec2vec_ui_similarity = Spec2Vec(unique_inchi_model_mds,
                                              intensity_weighting_power=0.5,
-                                             allowed_missing_percentage=20)
+                                             allowed_missing_percentage=60)
         md_similarity_ui_matrix = md_spec2vec_ui_similarity.matrix(
             uniq_documents_mds, uniq_documents_mds, is_symmetric=True)
         np.save(md_sims_unique_out, md_similarity_ui_matrix)
@@ -470,7 +475,7 @@ if __name__ == "__main__":
                             "modcosine"],
             ignore_non_annotated=True,
             intensity_weighting_power=0.5,
-            allowed_missing_percentage=50.0,
+            allowed_missing_percentage=60.0,
             cosine_tol=0.005,
             mass_tolerance=1.0,
             mass_tolerance_type="ppm")
@@ -484,7 +489,7 @@ if __name__ == "__main__":
                             "modcosine"],
             ignore_non_annotated=True,
             intensity_weighting_power=0.5,
-            allowed_missing_percentage=50.0,
+            allowed_missing_percentage=60.0,
             cosine_tol=0.005,
             mass_tolerance=1.0,
             mass_tolerance_type="ppm")
@@ -498,7 +503,7 @@ if __name__ == "__main__":
             include_scores=["cosine", "modcosine"],
             ignore_non_annotated=True,
             intensity_weighting_power=0.5,
-            allowed_missing_percentage=50.0,
+            allowed_missing_percentage=60.0,
             cosine_tol=0.005,
             mass_tolerance=1.0,
             mass_tolerance_type="ppm")
