@@ -28,16 +28,20 @@ def get_commands() -> argparse.Namespace:
     """
     Returns argparse.ArgumentParser.parse_args object for command line options
     """
-    parser = argparse.ArgumentParser(description="Loads data from notebook 2\
-        in this repo and calculates jaccard similarity between mass\
+    parser = argparse.ArgumentParser(description="Loads either spectrum\
+        documents containing mass differences as words (md@...), or data from\
+        notebook 2 in this repo. Calculates jaccard similarity between mass\
         differences and fragments/neutral losses in a multithreading way.\
         Resulting matrix will be written to output_file.")
+    parser.add_argument("-s", "--spectrum_documents", metavar="<.pickle>",
+                        help="pickle file of spectrum documents also\
+        containing mass differences as 'md@...' in .words", required=False)
     parser.add_argument("-m", "--mds", metavar="<.pickle>", help="pickle file\
         containing list of list of mass difference occurrences (tuple)",
-                        required=True)
+                        required=False)
     parser.add_argument("-f", "--fragments", metavar="<.pickle>", help="pickle\
         file containing list of list of fragment/neutral loss occurrences\
-        (tuple)", required=True)
+        (tuple)", required=False)
     parser.add_argument("-o", "--output_file", metavar="<file>",
                         help="location of output file (default:\
                         jaccard_matrix.npz)", default="jaccard_matrix.npz")
@@ -97,14 +101,50 @@ def main():
     start = time.time()
     print("\nStart")
     cmd = get_commands()
+    input_checked = False
 
     # read pickled input files
     print("Reading input files")
-    with open(cmd.mds, 'rb') as inf:
-        md_occ = pickle.load(inf)
-    with open(cmd.fragments, 'rb') as inf:
-        fragment_occ = pickle.load(inf)
+    if cmd.mds and cmd.fragments:
+        input_checked = True
+        with open(cmd.mds, 'rb') as inf:
+            md_occ = pickle.load(inf)
+        with open(cmd.fragments, 'rb') as inf:
+            fragment_occ = pickle.load(inf)
 
+    # read pickled spectrum documents if provided
+    if cmd.spectrum_documents:
+        input_checked = True
+        # dict of {frag: [[spectra_names], [intensities]]}
+        per_fragment_spec_occ_dict = {}
+        per_md_spec_occ_dict = {}
+        for i, doc in enumerate(cmd.spectrum_documents):
+            spec_name = str(i)
+            for word, intensity in zip(doc.words, doc.weights):
+                if word.startswith("md@"):  # mass difference
+                    if word in per_md_spec_occ_dict:
+                        per_md_spec_occ_dict[word][0].append(spec_name)
+                        per_md_spec_occ_dict[word][1].append(intensity)
+                    else:
+                        per_md_spec_occ_dict[word] = []
+                        per_md_spec_occ_dict[word].append([spec_name])
+                        per_md_spec_occ_dict[word].append([intensity])
+                else:  # fragment/neutral loss
+                    if word in per_fragment_spec_occ_dict:
+                        per_fragment_spec_occ_dict[word][0].append(spec_name)
+                        per_fragment_spec_occ_dict[word][1].append(intensity)
+                    else:
+                        per_fragment_spec_occ_dict[word] = []
+                        per_fragment_spec_occ_dict[word].append([spec_name])
+                        per_fragment_spec_occ_dict[word].append([intensity])
+        md_occ = [(key, val[0], val[1]) for key, val in
+                  per_md_spec_occ_dict.items()]
+        fragment_occ = [(key, val[0], val[1]) for key, val in
+                        per_fragment_spec_occ_dict.items()]
+
+    if not input_checked:
+        raise ValueError("Supply either --spectrum_documents or" +
+                         " --mds and --fragments")
     # get only the occurrences
     just_md_occ = [[tup[0]] + tup[1] for tup in md_occ]
     column_names = []  # collect column names (fragments + neutral losses)
@@ -113,7 +153,7 @@ def main():
         column_names.append(tup[0])
         just_fragment_occ.append(tup[1])
 
-    # calc jaccard with multiprocessing, in chunks of 10,000 rows
+    # calc jaccard with multiprocessing, in chunks of chunk_len rows
     print("\nStart with calculations")
     chunk_len = 7500
     num_chunks = ceil(len(just_md_occ) / chunk_len)
