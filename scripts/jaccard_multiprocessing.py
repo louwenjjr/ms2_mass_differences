@@ -19,6 +19,7 @@ import argparse
 import time
 import numpy as np
 import scipy.sparse as sp
+import matplotlib.pyplot as plt
 from multiprocessing import Pool
 from typing import List, Tuple
 from functools import partial
@@ -48,6 +49,12 @@ def get_commands() -> argparse.Namespace:
                         jaccard_matrix.npz)", default="jaccard_matrix.npz")
     parser.add_argument("-c", "--cores", help="Cores to use (default: 20)",
                         default=20, type=int)
+    parser.add_argument("-l", "--lower_cutoff", type=float, help="lower\
+        cutoff for selecting MDs based on max jaccard score, default: 0.1",
+                        default=0.1)
+    parser.add_argument("-u", "--upper_cutoff", type=float, help="upper\
+            cutoff for selecting MDs based on max jaccard score, default: 0.5",
+                        default=0.5)
     return parser.parse_args()
 
 
@@ -200,13 +207,39 @@ def main():
              sparse_jaccard=sparse_jacc_matrix)
 
     # open matrix and save a tab delim of md\tmax_jaccard_value
-    out_max = os.path.join(os.path.split(output_file)[0],
+    out_base = os.path.split(output_file)[0]
+    out_max = os.path.join(out_base,
                            "jaccard_max_for_every_MD.txt")
     print(f"\nSaving max value for each MD to {out_max}")
     maxes = sparse_jacc_matrix.max(axis=1).toarray()
+    maxes = [m[0] for m in maxes]  # unlist
     with open(out_max, 'w') as outf:
         for md, mx in zip(row_names, maxes):
-            outf.write(f"{md}\t{mx[0]}\n")
+            outf.write(f"{md}\t{mx}\n")
+
+    # select mds based on cutoffs on jaccard score (default 0.1-0.5)
+    cut_scores, cut_names = zip(
+        *[(sc, name) for sc, name in zip(maxes, row_names) if
+          cmd.lower_cutoff <= sc[0] <= cmd.upper_cutoff])
+    cutoff_md_vals = [name.strip("md@") for name in cut_names]
+
+    # make plots based on max jacc score
+    plt.hist(maxes, bins=np.arange(0, 1.05, 0.05))
+    out_scores = os.path.join(out_base,
+                              "jaccard_max_for_every_MD_hist.png")
+    plt.savefig(out_scores)
+    plt.close()
+    plt.hist(cut_scores, bins=np.arange(0, 1.05, 0.05))
+    out_cut_scores = os.path.join(out_base,
+                                  "jaccard_max_for_every_MD_0.1-0.5_hist.png")
+    plt.savefig(out_cut_scores)
+    plt.close()
+
+    # save selected mds
+    out_sel_mds = os.path.join(out_base, 'selected_MDs_0.1-0.5_jaccard.txt')
+    with open(out_sel_mds, 'w') as outf:
+        for md in cutoff_md_vals:
+            outf.write(f"{md}\n")
 
     end = time.time()
     print("Time elapsed (hours): ", (end - start) / 3600)
