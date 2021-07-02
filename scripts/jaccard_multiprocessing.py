@@ -13,6 +13,7 @@ occurrence.pickle"
 occurrences.pickle"
 """
 
+import os
 import pickle
 import argparse
 import time
@@ -197,6 +198,16 @@ def main():
     sparse_jacc_matrix = sp.vstack(all_sparse_jacc_chunks)
     np.savez(output_file, rows=row_names, columns=column_names,
              sparse_jaccard=sparse_jacc_matrix)
+
+    # open matrix and save a tab delim of md\tmax_jaccard_value
+    out_max = os.path.join(os.path.split(output_file)[0],
+                           "jaccard_max_for_every_MD.txt")
+    print(f"\nSaving max value for each MD to {out_max}")
+    maxes = sparse_jacc_matrix.max(axis=1).toarray()
+    with open(out_max, 'w') as outf:
+        for md, mx in zip(row_names, maxes):
+            outf.write(f"{md}\t{mx[0]}\n")
+
     end = time.time()
     print("Time elapsed (hours): ", (end - start) / 3600)
 
