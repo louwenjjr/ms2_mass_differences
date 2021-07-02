@@ -118,7 +118,9 @@ def main():
         # dict of {frag: [[spectra_names], [intensities]]}
         per_fragment_spec_occ_dict = {}
         per_md_spec_occ_dict = {}
-        for i, doc in enumerate(cmd.spectrum_documents):
+        spectrum_documents_mds = pickle.load(
+            open(cmd.spectrum_documents, 'rb'))
+        for i, doc in enumerate(spectrum_documents_mds):
             spec_name = str(i)
             for word, intensity in zip(doc.words, doc.weights):
                 if word.startswith("md@"):  # mass difference
