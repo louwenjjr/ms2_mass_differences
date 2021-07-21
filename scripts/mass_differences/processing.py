@@ -58,6 +58,8 @@ def post_process_normal(spectrum_in: SpectrumType, min_peaks: int = 10) \
 
     s = spectrum_in.clone()
     s = normalize_intensities(s)
+    if any(np.isnan(s.peaks[1])):
+        return None  # remove spectra that have all intensities 0
     s = select_by_mz(s, mz_from=0, mz_to=1000)
     s = require_minimum_number_of_peaks(s, n_required=min_peaks)
     s = reduce_to_number_of_peaks(s, n_required=min_peaks, ratio_desired=0.5)
@@ -95,6 +97,8 @@ def post_process_md(spectrum_in: SpectrumType, low_int_cutoff: float = 0.05,
     # remove precurzor_mz from spectra so neutral losses don't end up in MDs
     s = remove_precursor_mz_peak(s)
     s = normalize_intensities(s)
+    if any(np.isnan(s.peaks[1])):
+        return None  # remove spectra that have all intensities 0
     s = select_by_mz(s, mz_from=0, mz_to=1000)
     s = require_minimum_number_of_peaks(s, n_required=min_peaks)
     s = reduce_to_number_of_peaks(s, n_required=min_peaks, ratio_desired=0.5)
@@ -131,6 +135,8 @@ def post_process_classical(spectrum_in: SpectrumType, min_peaks: int = 10) \
 
     s = spectrum_in.clone()
     s = normalize_intensities(s)
+    if any(np.isnan(s.peaks[1])):
+        return None  # remove spectra that have all intensities 0
     s = select_by_mz(s, mz_from=0, mz_to=1000)
     s = require_minimum_number_of_peaks(s, n_required=min_peaks)
     s = select_by_relative_intensity(s, intensity_from=0.01, intensity_to=1.0)
